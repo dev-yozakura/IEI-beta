@@ -516,3 +516,23 @@ h1 {
 #combinedEqList .source:contains("中央気象署") {
   color: #95a5a6;
 }
+
+/* プルダウンスタイル */
+#jmaXmlSelect {
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* 詳細情報スタイル */
+#jmaXmlDetail {
+  padding: 15px;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  min-height: 150px;
+  margin-top: 10px;
+}
