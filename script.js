@@ -1442,7 +1442,7 @@ function updateCombinedDisplay() {
     // JMA地震情報リスト
     if (item.source === "jma" && item.displayType === "eq") {
       html += `<h3>${item.Title}</h3>`;
-      html += `<p class="time">発生時刻: ${item.time}</p>`;
+      html += `<p class="time">発生時刻: ${item.time_full}</p>`;
       html += `<p class="location">震源地: ${item.location}</p>`;
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
 

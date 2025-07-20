@@ -13,6 +13,7 @@ h1 {
 }
 
 .section {
+  line-height: 0.4em;
   background-color: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
@@ -242,6 +243,7 @@ h1 {
 }
 
 .time {
+  line-height: 1em;
   font-style: italic;
   color: #666;
   display: block;
@@ -249,6 +251,7 @@ h1 {
 }
 
 .location {
+  line-height: 0.3em;
   color: #2980b9;
   font-weight: bold;
 }
