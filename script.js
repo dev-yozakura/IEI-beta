@@ -674,6 +674,8 @@ async function fetchCwaData() {
       `https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0015-002?Authorization=${CWA_API_KEY}&format=JSON`
     );
     const data = await response.json();
+    const Earthquake = data.records.Earthquake || {};
+   console.log("CWAデータ受信:", data);
 
     // データ構造のnullチェック
     if (
@@ -687,9 +689,11 @@ async function fetchCwaData() {
       updateCombinedDisplay();
       return;
     }
-
-    const earthquake = data.records.Earthquake[0]; // 最新情報のみ
-
+ for (let i = 0; i <= 0; i++) {
+    const key = `${i}`;
+    const eq = data.records.Earthquake[key];
+    const earthquake = eq; 
+ 
     // AreaInfo が存在するか確認
     const areaInfo = earthquake.AreaInfo || {};
     const areaDesc = Array.isArray(areaInfo.AreaDesc) ? areaInfo.AreaDesc : [];
@@ -748,7 +752,7 @@ async function fetchCwaData() {
       displayType: "eq",
       source: "cwa",
     };
-
+  }
     cwaLastUpdate = new Date();
     updateCombinedDisplay();
   } catch (error) {
@@ -1900,7 +1904,7 @@ function updateEmscEqList(data) {
       logEmscDataStructure(eq); // デバッグ用ログを追加
 
       // 統一構造に変換
-      combinedData.emscEqList[key] = {
+      combinedData.emscEqList = {
         ...eq,
         source: "emsc",
         displayType: "eq",
@@ -1942,9 +1946,13 @@ function updateCwaDisplay(data) {
     cwaData = [];
     return;
   }
-
+ for (let i = 0; i <= 0; i++) {
+    const key = `${i}`;
+    const eq = data.records.Earthquake[key];
+    const earthquake = eq; 
+ }
   // データ構造の安全な抽出
-  const earthquake = data.records?.Earthquake?.[0];
+  
   if (!earthquake) {
     console.warn("CWAデータに地震情報がありません");
     return;
@@ -1994,8 +2002,9 @@ function updateCwaDisplay(data) {
         </div>
     `;
   cwaList.appendChild(container);
-}
+  updateCombinedDisplay(); // 統合表示を更新
 
+}
 // WebSocket接続関数
 function connectJmaEew() {
   if (jmaEewWs) jmaEewWs.close();
