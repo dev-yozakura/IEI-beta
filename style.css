@@ -15,8 +15,6 @@ h1 {
 
 
 
-/* PC用（画面幅768px以上） */
-@media screen and (min-width: 768px) {
   .section {
   line-height: 0.5em;
   background-color: #fff;
@@ -52,46 +50,6 @@ h1 {
   margin-top: 10px;
   font-size: 0.9em;
   color: #777;
-}
-}
-
-/* スマホ用（画面幅767px以下） */
-@media screen and (max-width: 767px) {
-  .section {
-  line-height: 15em;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  margin-bottom: 30px;
-  border-left: 5px solid #3498db;
-}
-.time {
-  line-height: 15em;
-  font-style: italic;
-  color: #666;
-  display: block;
-  margin: 5px 0;
-}
-
-.location {
-  line-height: 1em;
-  color: #2980b9;
-  font-weight: bold;
-  white-space: nowrap;
-}
-
-.source {
-  font-size: 0.9em;
-  color: #777;
-  margin-top: 5px;
-}
-
-.status {
-  margin-top: 10px;
-  font-size: 0.9em;
-  color: #777;
-}
 }
 
 .section.jma-eew {
