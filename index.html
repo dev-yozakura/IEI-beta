@@ -56,6 +56,23 @@
         >
         <input type="checkbox" id="sourceUSGS" checked />
         <label for="sourceUSGS">USGS</label>
+
+    <div style="margin-top: 15px">
+      <label for="usgssetting">USGS設定:</label>
+
+      <select id="usgssetting">
+        <option value="1d">1d(default)</option>
+        <option value="1h">1h</option>
+        <option value="1w">1w</option>
+        <option value="1m">1m</option>
+      </select>
+      <select id="usgssettingmag">
+        <option value="significant">significant(Magnitude)</option>
+        <option value="4.5">4.5+</option>
+        <option value="2.5">2.5+</option>
+        <option value="1.0">1.0+</option>
+        <option value="all">all</option>
+      </select>
         <input type="checkbox" id="sourceCWA" checked />
         <label for="sourceCWA">中央気象署（台湾）</label>
         <input type="checkbox" id="sourceEMSC" checked />
