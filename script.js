@@ -1384,7 +1384,7 @@ function updateCombinedDisplay() {
       html += `<p class="location">震源地: ${item.location}</p>`;
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
-      if (item.intensity && item.intensity !== "情報なし") {
+      if (item.intensity !== "情報なし") {
         html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
       }
 
@@ -1895,10 +1895,8 @@ function updateCencEqList(data) {
 function updateEmscEqList(data) {
   combinedData.emscEqList = {};
 
-  for (let i = 1; i <= 50; i++) {
-    const key = `No${i}`;
-    if (data[key] && data[key].type === "reviewed") {
-      const eq = data[key].properties;
+   
+      const eq = data.properties;
       logEmscDataStructure(eq); // デバッグ用ログを追加
 
       // 統一構造に変換
@@ -1913,8 +1911,8 @@ function updateEmscEqList(data) {
         depth: eq.Depth || eq.depth || "情報なし",
         intensity: eq.MaxIntensity || eq.intensity || "情報なし",
       };
-    }
-  }
+    
+  
 
   emscLastUpdate = new Date();
   updateCombinedDisplay();
@@ -1935,6 +1933,8 @@ function connectBmkg() {
 // 中央気象署（台湾）地震情報表示更新
 function updateCwaDisplay(data) {
   const cwaList = document.getElementById("cwaList");
+   console.log("CWAデータ受信:", data);
+
   cwaList.innerHTML = "";
 
   if (!data) {
@@ -2009,6 +2009,7 @@ function connectJmaEew() {
   jmaEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+ console.log("JMA EEWデータ受信:", data);
 
       if (data.type === "heartbeat") {
         jmaEewWs.send(
@@ -2048,6 +2049,7 @@ function connectScEew() {
   scEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+ console.log("四川地震局データ受信:", data);
 
       if (data.type === "heartbeat") {
         scEewWs.send(
@@ -2084,6 +2086,7 @@ function connectFjEew() {
   fjEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+ console.log("福建地震局データ受信:", data);
 
       if (data.type === "heartbeat") {
         fjEewWs.send(
@@ -2121,6 +2124,7 @@ function connectCeaEew() {
   ceaEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+ console.log("中国地震局データ受信:", data);
 
       if (data.type === "heartbeat") {
         ceaEewWs.send(
@@ -2159,6 +2163,7 @@ function connectIclEew() {
   iclEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+ console.log("成都地震局データ受信:", data);
 
       if (data.type === "heartbeat") {
         iclEewWs.send(
@@ -2205,6 +2210,7 @@ function connectJmaEqList() {
   jmaEqList.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+ console.log("JMAデータ受信:", data);
 
       if (data.type === "heartbeat") {
         jmaEqList.send(
@@ -2248,7 +2254,7 @@ function connectCencEqList() {
   cencEqWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-
+ console.log("CENCデータ受信:", data);
       if (data.type === "heartbeat") {
         cencEqWs.send(
           JSON.stringify({ type: "pong", timestamp: data.timestamp })
