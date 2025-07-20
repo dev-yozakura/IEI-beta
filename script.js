@@ -2318,7 +2318,7 @@ function connectEmscEqList() {
   };
 }
 // 自動取得間隔
-let autoFetchInterval = null;
+let autoFetchInterval = 30;
 
 // 自動取得開始
 function startAutoFetch() {
