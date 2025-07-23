@@ -8,6 +8,9 @@ let combinedData = {
   emscEqList: {},
   cwaEqList: [],
   cwaEqList_tiny: [],
+  usgsData: [],
+  bmkgData: [],
+  bmkg_M5Data: [],
 };
 
 let markerGroup = null; // マーカーのグループを保持する変数
@@ -398,7 +401,7 @@ function updateEmscEqList(data) {
 // USGS 地震情報表示更新
 function updateUsgsList(data) {
   if (data && data.type === "usgs") {
-    usgsData = data;
+    combinedData.usgsData = data;
     checkAndNotify(data, "usgs"); // ✅ 通知を送信
   }
   usgsLastUpdate = new Date();
@@ -408,7 +411,7 @@ function updateUsgsList(data) {
 // BMKG 地震情報表示更新
 function updateBmkgDisplay(data) {
   if (data && data.type === "bmkg") {
-    bmkgData = data;
+    combinedData.bmkgData = data;
     checkAndNotify(data, "bmkg"); // ✅ 通知を送信
   }
 
@@ -419,7 +422,7 @@ function updateBmkgDisplay(data) {
 // BMKG M5.0+ 地震情報表示更新
 function updateBmkgM5Display(data) {
   if (data && data.type === "bmkg_m5") {
-    bmkg_M5Data = data;
+    combinedData.bmkg_M5Data = data;
     checkAndNotify(data, "bmkg_m5"); // ✅ 通知を送信
   }
 
@@ -641,7 +644,7 @@ async function fetchUsgsData() {
     console.log("USGSデータ受信:", data);
 
     // 既存データをクリア
-    usgsData = [];
+    combinedData.usgsData = [];
 
     // features を抽出
     if (data && Array.isArray(data.features)) {
@@ -668,7 +671,7 @@ async function fetchUsgsData() {
           props.mag !== undefined ? props.mag.toFixed(1) : "情報なし";
 
         // 統一構造に変換
-        usgsData.push({
+        combinedData.usgsData.push({
           type: "usgs",
           Title: props.title,
           time: time.toLocaleString(),
@@ -714,6 +717,10 @@ async function fetchCwaData() {
         const magnitude = EarthquakeInfo.EarthquakeMagnitude.MagnitudeValue;
         const depth = EarthquakeInfo.FocalDepth;
         const location = EarthquakeInfo.Epicenter.Location;
+        const lat =
+          EarthquakeInfo.Epicenter.EpicenterLatitude.toFixed(4) || "情報なし";
+        const lon =
+          EarthquakeInfo.Epicenter.EpicenterLongitude.toFixed(4) || "情報なし";
 
         const ReportContent = item.ReportContent || "情報なし";
         const match = ReportContent.match(/Highest intensity was \d+/);
@@ -729,6 +736,8 @@ async function fetchCwaData() {
             magnitude: magnitude,
             depth: depth,
             intensity: intensity,
+            lat: lat,
+            lng: lon,
             displayType: "eq",
             source: "cwa",
           });
@@ -766,6 +775,10 @@ async function fetchCwaTinyData() {
         const magnitude = EarthquakeInfo.EarthquakeMagnitude.MagnitudeValue;
         const depth = EarthquakeInfo.FocalDepth;
         const location = EarthquakeInfo.Epicenter.Location;
+        const lat =
+          EarthquakeInfo.Epicenter.EpicenterLatitude.toFixed(4) || "情報なし";
+        const lon =
+          EarthquakeInfo.Epicenter.EpicenterLongitude.toFixed(4) || "情報なし";
 
         const ReportContent = item.ReportContent || "情報なし";
         const match = ReportContent.match(/Highest intensity was \d+/);
@@ -781,6 +794,8 @@ async function fetchCwaTinyData() {
             magnitude: magnitude,
             depth: depth,
             intensity: intensity,
+            lat: lat,
+            lng: lon,
             displayType: "eq",
             source: "cwa_tiny",
           });
@@ -1136,7 +1151,7 @@ async function fetchBmkgData() {
     const data = await response.json();
 
     // 既存データをクリア
-    bmkgData = [];
+    combinedData.bmkgData = [];
 
     // 地震情報を抽出
     if (data.Infogempa && Array.isArray(data.Infogempa.gempa)) {
@@ -1157,7 +1172,7 @@ async function fetchBmkgData() {
         const intensity = intensityMatch?.[0]?.trim() || "情報なし";
 
         // 地震情報を統一構造に変換
-        bmkgData.push({
+        combinedData.bmkgData.push({
           type: "bmkg",
           Title: "地震情報",
           Tanggal: item.Tanggal,
@@ -1192,7 +1207,7 @@ async function fetchBmkg_M5Data() {
     const data = await response.json();
 
     // 既存データをクリア
-    bmkg_M5Data = [];
+    combinedData.bmkg_M5Data = [];
 
     // 地震情報を抽出
     if (data.Infogempa && Array.isArray(data.Infogempa.gempa)) {
@@ -1213,7 +1228,7 @@ async function fetchBmkg_M5Data() {
         const intensity = intensityMatch?.[0]?.trim() || "情報なし";
 
         // 地震情報を統一構造に変換
-        bmkg_M5Data.push({
+        combinedData.bmkg_M5Data.push({
           type: "bmkg_m5",
           Title: "M5.0+ 地震情報",
           Tanggal: item.Tanggal,
@@ -1290,8 +1305,8 @@ function updateCombinedDisplay() {
     allData.push(iclData);
   }
   // USGS 地震情報
-  if (showUSGS && usgsData.length > 0) {
-    allData.push(...usgsData);
+  if (showUSGS && combinedData.usgsData.length > 0) {
+    allData.push(...combinedData.usgsData);
   }
 
   // 中央気象署（台湾）地震情報
@@ -1323,7 +1338,7 @@ function updateCombinedDisplay() {
   }
   // JMA 地震情報リスト
   if (showJmaEqList && combinedData.jmaEqList) {
-    Object.values(combinedData.jmaEqList).forEach((item, index) => {
+    Object.values(combinedData.jmaEqList).forEach((item) => {
       // typeフィールドを除外
       if (item && item.Title) {
         allData.push({
@@ -1355,15 +1370,15 @@ function updateCombinedDisplay() {
   }
 
   // BMKG地震情報の追加
-  if (showBMKG && bmkgData.length > 0) {
-    bmkgData.forEach((item) => {
+  if (showBMKG && combinedData.bmkgData.length > 0) {
+    combinedData.bmkgData.forEach((item) => {
       allData.push(item);
     });
   }
 
   // BMKG地震情報（M5.0+）
-  if (showBMKG_M5 && bmkg_M5Data.length > 0) {
-    bmkg_M5Data.forEach((item) => {
+  if (showBMKG_M5 && combinedData.bmkg_M5Data.length > 0) {
+    combinedData.bmkg_M5Data.forEach((item) => {
       allData.push(item);
     });
   }
@@ -1421,6 +1436,8 @@ function updateCombinedDisplay() {
 
   // 表示更新
   combinedEqList.innerHTML = "";
+  // 関数を呼び出して地図を表示
+  initMapWithMarkers(map, combinedData);
 
   if (allData.length === 0) {
     combinedEqList.innerHTML = "<p class='no-data'>地震情報がありません</p>";
@@ -1435,8 +1452,6 @@ function updateCombinedDisplay() {
 
     let html = "";
 
-    // 関数を呼び出して地図を表示
-    initMapWithMarkers(map, usgsData);
     // 中央気象署（台湾）地震情報
     if (item.source === "cwa" && item.displayType === "eq") {
       html += `<h3>${item.Title}</h3>`;
@@ -1447,6 +1462,7 @@ function updateCombinedDisplay() {
       html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
 
       html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）</p>`;
     }
     // 中央気象署（台湾）小区域地震情報
@@ -1457,6 +1473,7 @@ function updateCombinedDisplay() {
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
       html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
       html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）小区域地震情報</p>`;
     }
     // USGS 地震情報
@@ -1928,29 +1945,6 @@ function updateJmaEqList(data) {
   combinedData.jmaEqList = { ...data };
   delete combinedData.jmaEqList.md5;
   delete combinedData.jmaEqList.Pond;
-
-  // No1～No50までループ
-  for (let i = 1; i <= 50; i++) {
-    const key = `No${i}`;
-    const eq = data[key];
-
-    if (!eq || typeof eq !== "object") continue;
-
-    const item = document.createElement("div");
-    item.className = "earthquake-item";
-    item.innerHTML = `
-            <div class="earthquake-info">
-                <strong>${eq.Title}</strong><br>
-                <span class="time">発生時刻: ${eq.time}</span><br>
-                <span class="location">震源地: ${eq.location}</span><br>
-                <span>マグニチュード: ${eq.magnitude}</span><br>
-                <span>最大震度: ${getIntersityLabel(eq.shindo)}</span><br>
-                <span>深さ: ${eq.depth} </span><br>
-                <span class="source">情報源: 日本気象庁</span>
-            </div>
-        `;
-    combinedEqList.appendChild(item);
-  }
 }
 // 中国地震台網 地震情報表示更新
 function updateCencEqList(data) {
@@ -2245,6 +2239,9 @@ function connectJmaEqList() {
     console.error("JMA EQ WebSocketエラー:", error);
     jmaEqList.close();
   };
+
+  combinedData.jmaEqList = []; // 初期化
+
 }
 
 // 中国地震台網 地震情報リスト接続関数
@@ -2642,7 +2639,7 @@ initialJmaXmlFetch();
 
 // 地図を初期化
 function initMap() {
-  const map = L.map("map").setView([35.6895, 139.6917], 5); // 初期座標（東京）
+  const map = L.map("map").setView([35.6895, 0], 1); // 初期座標（東京）
 
   // タイルレイヤーを追加
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -2663,16 +2660,20 @@ function initMapWithMarkers(map, markers) {
   markerGroup = L.featureGroup();
 
   // 各マーカーを追加
-  markers.forEach((markerData) => {
+  markers.usgsData.forEach((markerData) => {
     const marker = L.marker([
       markerData.lat || markerData.latitude,
       markerData.lng || markerData.longitude,
     ]).bindPopup(
       (markerData.time || markerData.OriginTime) +
         "<br>" +
-        markerData.location +
+        (markerData.location ||
+          markerData.HypoCenter ||
+          markerData.Hypocenter) +
         "<br>" +
-        `<p>M${markerData.magnitude}  深さ: ${markerData.depth} km</p>`
+        `<p>M${markerData.magnitude || markerData.Magunitude}  深さ: ${
+          markerData.depth || markerData.Depth
+        } km</p>`
     );
 
     markerGroup.addLayer(marker);
@@ -2682,9 +2683,6 @@ function initMapWithMarkers(map, markers) {
   map.addLayer(markerGroup);
 
   // 地図の範囲をマーカーに合わせる
-  if (markers.length > 0) {
-    map.fitBounds(markerGroup.getBounds(), { padding: [50, 50] });
-  }
 }
 // 地図を初期化
 const map = initMap();
