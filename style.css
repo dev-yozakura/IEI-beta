@@ -545,6 +545,6 @@ h1 {
 
 /* 地図の表示領域を指定 */
 #map {
-    height: 600px;
+    height: 80vh;
     width: 100%;
 }

@@ -1435,6 +1435,8 @@ function updateCombinedDisplay() {
 
     let html = "";
 
+    // 関数を呼び出して地図を表示
+    initMapWithMarkers(map, usgsData);
     // 中央気象署（台湾）地震情報
     if (item.source === "cwa" && item.displayType === "eq") {
       html += `<h3>${item.Title}</h3>`;
@@ -1466,7 +1468,7 @@ function updateCombinedDisplay() {
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
       html += `<p>深さ: ${item.depth} km</p>`;
-      html += `<p>緯度: ${item.lat}, 経度: ${item.lng}: USGS</p>`;
+      html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: USGS</p>`;
     }
     // BMKG地震情報
@@ -2413,8 +2415,6 @@ function startAutoFetch() {
   }
 
   alert(`${interval}秒ごとに自動取得を開始しました`);
-  // 関数を呼び出して地図を表示
-  initMapWithMarkers(map, usgsData);
 }
 
 // 通知設定のイベントリスナー
@@ -2670,13 +2670,9 @@ function initMapWithMarkers(map, markers) {
     ]).bindPopup(
       (markerData.time || markerData.OriginTime) +
         "<br>" +
-        (markerData.location ||
-          markerData.HypoCenter ||
-          markerData.Hypocenter) +
+        markerData.location +
         "<br>" +
-        `<p>M${markerData.magnitude || markerData.Magunitude}  深さ: ${
-          markerData.depth || markerData.Depth
-        } km</p>`
+        `<p>M${markerData.magnitude}  深さ: ${markerData.depth} km</p>`
     );
 
     markerGroup.addLayer(marker);
