@@ -6,7 +6,7 @@ let combinedData = {
   jmaEqList: {},
   cencEqList: {},
   emscEqList: {},
-  cwaEqlist: [],
+  cwaEqList: [],
 };
 
 // 通知関連変数
@@ -27,6 +27,7 @@ let connections = {
   ceaEew: false,
   iclEew: false,
   emscEq: false,
+  cwaEq: false,
 };
 
 // 最終更新時刻
@@ -40,6 +41,7 @@ let lastUpdateTimes = {
   ceaEew: null,
   iclEew: null,
   emscEq: null,
+  cwaEq: null,
 };
 
 // DOM要素取得
@@ -112,7 +114,6 @@ let bmkg_M5LastUpdate = null;
 let usgsData = [];
 let usgsLastUpdate = null;
 // 中央気象署（台湾）用変数
-let cwaLastUpdate = null;
 const CWA_API_KEY = "CWA-1D4B4F6B-A52D-4CC0-9478-5C9AE9D7270A"; // CWA APIキー
 
 // CWA 地震情報のフィールド抽出
@@ -127,6 +128,7 @@ let jmaEqList = null;
 let ceaEewWs = null;
 let iclEewWs = null;
 let emscEqWs = null;
+let cwaEqWs = null;
 
 // 中国地震局（CEA）用変数
 let ceaWs = null;
@@ -309,6 +311,16 @@ function checkNewEarthquake(dataArray) {
   });
 }
 
+// 中央気象署（台湾）地震情報表示更新
+function updateCwaEqList(data) {
+if(data && data.length > 0){
+  combinedData.cwaEqList = data;
+}
+  lastUpdateTimes.cwaEq = new Date();
+  updateCombinedDisplay();
+
+  
+}
 // JMA 緊急地震速報表示更新
 function updateJmaEewDisplay(data) {
   if (data.isCancel) {
@@ -430,25 +442,25 @@ if (soundNotificationCheckbox) {
 
 // 中国地震局（CEA）接続関数
 function connectCea() {
-  if (ceaWs) ceaWs.close();
-  ceaWs = new WebSocket("wss://ws.fanstudio.tech/cea");
+  if (ceaEewWs) ceaEewWs.close();
+  ceaEewWs = new WebSocket("wss://ws.fanstudio.tech/cea");
 
-  ceaWs.onopen = () => {
+  ceaEewWs.onopen = () => {
     connections.cea = true;
     ceaStatus.textContent = "接続状況: 接続済み";
     ceaStatus.className = "status connected";
 
-    if (ceaWs.readyState === WebSocket.OPEN) {
-      ceaWs.send("query_cea");
+    if (ceaEewWs.readyState === WebSocket.OPEN) {
+      ceaEewWs.send("query_cea");
     }
   };
 
-  ceaWs.onmessage = (event) => {
+  ceaEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
 
       if (data.type === "heartbeat") {
-        ceaWs.send(JSON.stringify({ type: "pong", timestamp: data.timestamp }));
+        ceaEewWs.send(JSON.stringify({ type: "pong", timestamp: data.timestamp }));
       } else if (data.type === "initial" || data.type === "update") {
         lastUpdateTimes.cea = new Date();
         updateCeaDisplay(data.Data);
@@ -460,16 +472,16 @@ function connectCea() {
     updateCombinedDisplay();
   };
 
-  ceaWs.onclose = () => {
+  ceaEewWs.onclose = () => {
     connections.cea = false;
     ceaStatus.textContent = "接続状況: 切断されました";
     ceaStatus.className = "status disconnected";
     setTimeout(connectCea, 30000); // 30秒後に再接続
   };
 
-  ceaWs.onerror = (error) => {
+  ceaEewWs.onerror = (error) => {
     console.error("CEA WebSocketエラー:", error);
-    ceaWs.close();
+    ceaEewWs.close();
   };
 }
 // 成都高新防災減災研究所（ICL）接続関数（公開ソフトウェアでの使用禁止）
@@ -671,89 +683,42 @@ async function fetchCwaData() {
       `https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0015-002?Authorization=${CWA_API_KEY}&format=JSON`
     );
     const data = await response.json();
-    const Earthquake = await data.records.Earthquake[0];
+
     console.log("CWAデータ受信:", data);
+    // 既存データをクリア
+    cwaData = [];
 
+    // features を抽出
+    if (data && Array.isArray(data.records.Earthquake)) {
+      data.records.Earthquake.forEach((item) => {
+        const EarthquakeInfo = item.EarthquakeInfo;
 
-    // 既存のデータをクリア
-    combinedData={
-      cwaEqlist: [],
-    };
+        const time = new Date(EarthquakeInfo.OriginTime);
+const ReportType = item.ReportType || "情報なし";
 
-    if(data && Array.isArray(data.records.Earthquake)) {
-      data.records.Earthquake.forEach((Earthquake) => {
+        const magnitude = EarthquakeInfo.EarthquakeMagnitude.MagnitudeValue;
+        const depth = EarthquakeInfo.FocalDepth;
+        const location = EarthquakeInfo.Epicenter.Location;
+        
+        // 統一構造に変換
+        combinedData.cwaEqList.push({
+          type: "cwa",
+          Title: ReportType,
+          time: time.toLocaleString(),
+          location: location,
+          magnitude: magnitude,
+          depth: depth,
+          displayType: "eq",
+          source: "cwa",
+        });
 
-      
-
-
-      // AreaInfo が存在するか確認
-      const areaInfo = Earthquake.AreaInfo || {};
-      const areaDesc = Array.isArray(areaInfo.AreaDesc)
-        ? areaInfo.AreaDesc
-        : [];
-
-      // 震源地情報の抽出
-      const epicenter = Earthquake.EarthquakeInfo?.Epicenter || {};
-      const location = epicenter.Location || "情報なし";
-
-      // マグニチュードの抽出
-      const mag = Earthquake.EarthquakeInfo?.EarthquakeMagnitude || {};
-      const magnitude =
-        mag.MagnitudeValue !== undefined
-          ? mag.MagnitudeValue.toFixed(1)
-          : "情報なし";
-
-      // 深さの抽出
-      const depth =
-        Earthquake.EarthquakeInfo?.FocalDepth !== undefined
-          ? `${Earthquake.EarthquakeInfo.FocalDepth} km`
-          : "情報なし";
-
-      // 震度情報の抽出（最大値を取得）
-      let intensity = "情報なし";
-      if (
-        Earthquake.Intensity?.ShakingArea &&
-        Array.isArray(Earthquake.Intensity.ShakingArea)
-      ) {
-        const intensityValues = Earthquake.Intensity.ShakingArea.filter(
-          (area) => area.AreaIntensity !== undefined
-        )
-          .map((area) => area.AreaIntensity)
-          .filter((int) => int !== "情報なし");
-
-        if (intensityValues.length > 0) {
-          intensity = intensityValues.reduce(
-            (max, val) => (val > max ? val : max),
-            "情報なし"
-          );
-        }
-      }
-      // 時刻の安全な変換
-      const originTime =
-        Earthquake.EarthquakeInfo?.OriginTime !== undefined
-          ? `${Earthquake.EarthquakeInfo.OriginTime}`
-          : "情報なし";
-
-      // 統一構造に変換
-      combinedData.cwaEqlist.push({
-        type: "cwa",
-        Title: "中央気象署（台湾）",
-        time: originTime.toLocaleString(),
-        location: location,
-        magnitude: magnitude,
-        depth: depth,
-        intensity: intensity,
-        displayType: "eq",
-        source: "cwa",
       });
-    });
-  }
-    cwaLastUpdate = new Date();
+    }
+
+    lastUpdateTimes.cwaEq = new Date();
     updateCombinedDisplay();
   } catch (error) {
     console.error("CWAデータ取得エラー:", error);
-    combinedData.cwaEqlist.push = [];
-    updateCombinedDisplay();
   }
 }
 
@@ -1259,8 +1224,17 @@ function updateCombinedDisplay() {
   }
 
   // 中央気象署（台湾）地震情報
-  if (showCWA && combinedData.cwaEqlist.push) {
-    allData.push(combinedData.cwaEqlist.push);
+  if (showCWA && combinedData.cwaEqList) {
+    Object.values(combinedData.cwaEqList).forEach((item) => {
+      // typeフィールドを除外
+      if (item) {
+        allData.push({
+          ...item,
+          source: "cwa",
+          displayType: "eq",
+        });
+      }
+    });
   }
   // JMA 地震情報リスト
   if (showJmaEqList && combinedData.jmaEqList) {
@@ -1387,7 +1361,7 @@ function updateCombinedDisplay() {
         html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
       }
 
-      html += `<p>深さ: ${item.depth}</p>`;
+      html += `<p>深さ: ${item.depth} km</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）</p>`;
     }
     // USGS 地震情報
@@ -1924,54 +1898,7 @@ function connectBmkg() {
   autoFetchInterval = setInterval(fetchBmkgData, 300000); // 5分ごと
 }
 
-// 中央気象署（台湾）地震情報表示更新
-function updateCwaDisplay(data) {
-  const cwaList = document.getElementById("cwaList");
-  console.log("CWAデータ受信:", data);
 
-  cwaList.innerHTML = "";
-
-  if (!data) {
-    cwaList.innerHTML = "<p>地震情報がありません</p>";
-    combinedData.cwaEqlist.push = [];
-    return;
-  }
-  for (let i = 0; i <= 0; i++) {
-    const key = `${i}`;
-    const eq = data.records.Earthquake[key];
-
-    if (!eq || typeof eq !== "object") continue;
-
-    const container = document.createElement("div");
-  container.className = "earthquake-item";
-  container.innerHTML = `
-        <div class="earthquake-info">
-            <strong>中央気象署（台湾）</strong><br>
-            <span class="time">発生時刻: ${eq.EarthquakeInfo.Epicenter.OriginTime.toLocaleString()}</span><br>
-            <span class="time">発表時刻: ${reportTime.toLocaleString()}</span><br>
-            <span class="location">震源地: ${areaDesc}</span><br>
-            <span>マグニチュード: ${eq.EarthquakeInfo.EarthquakeMagnitude.Value}</span><br>
-            <span>最大震度: ${getIntersityLabel(intensity)}</span><br>
-            <span>深さ: ${eq.EarthquakeInfo.FocalDepth.Value} km</span><br>
-            <span class="source">情報源: 中央気象署（台湾）</span>
-        </div>
-    `;
-  cwaList.appendChild(container);
-  updateCombinedDisplay(); // 統合表示を更新
-  }
-  // データ構造の安全な抽出
-
-  if (!eq) {
-    console.warn("CWAデータに地震情報がありません");
-    return;
-  }
-
-  
-  // デバッグ用ログ
-  console.log("CWAデータ:", combinedData.cwaEqlist.push);
-
-  
-}
 // WebSocket接続関数
 function connectJmaEew() {
   if (jmaEewWs) jmaEewWs.close();
@@ -2012,6 +1939,7 @@ function connectJmaEew() {
     jmaEewWs.close();
   };
 }
+
 
 function connectScEew() {
   if (scEewWs) scEewWs.close();
@@ -2352,19 +2280,19 @@ function startAutoFetch() {
     fetchBmkg_M5Data(); // HTTPで取得
 
     // 中国地震局（CEA）データ
-    if (connections.cea && ceaWs?.readyState === WebSocket.OPEN) {
-      ceaWs.send("query_cea");
+    if (connections.ceaEew && ceaEewWs?.readyState === WebSocket.OPEN) {
+      ceaEewWs.send("query_cea");
     }
 
     // 成都高新防災減災研究所（ICL）データ（公開ソフトウェアでの使用禁止）
-    if (connections.icl && iclWs?.readyState === WebSocket.OPEN) {
-      iclWs.send("query_icleew");
+    if (connections.iclEew && iclEewWs?.readyState === WebSocket.OPEN) {
+      iclEewWs.send("query_icleew");
     }
     // USGSデータ
     fetchUsgsData(); // ✅ USGSデータを定期取得
     // CWA 地震情報
-   if (connections.cwa && cwaWs?.readyState === WebSocket.OPEN) {
-      cwaWs.send("query_cwa");
+   if (connections.cwaEq && cwaEqWs?.readyState === WebSocket.OPEN) {
+      cwaEqWs.send("query_cwa");
     }
   }, interval * 1000);
 
@@ -2377,6 +2305,7 @@ function startAutoFetch() {
   if (connections.emscEq) emscEqWs.send("query_emsc_eqlist");
   if (connections.ceaEew) ceaEewWs.send("query_ceaeew");
   if (connections.iclEew) iclEewWs.send("query_icleew");
+  if (connections.cwa) cwaEqWs.send("query_cwa");
   // 初回XML取得
   if (!jmaXmlLastUpdate) {
     fetchJmaXmlData();
