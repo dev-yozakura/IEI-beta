@@ -10,6 +10,8 @@ let combinedData = {
   cwaEqList_tiny: [],
 };
 
+let markerGroup = null; // マーカーのグループを保持する変数
+
 // 通知関連変数
 let enableNotification = true;
 let soundNotification = false;
@@ -675,7 +677,7 @@ async function fetchUsgsData() {
           magnitude: magnitude,
           depth: depth,
           lat: lat,
-          lon: lon,
+          lng: lon,
           displayType: "eq",
           source: "usgs",
         });
@@ -720,18 +722,17 @@ async function fetchCwaData() {
           highestIntensity = match[0];
           const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
           combinedData.cwaEqList.push({
-          type: "cwa",
-          Title: ReportType,
-          time: time.toLocaleString(),
-          location: location,
-          magnitude: magnitude,
-          depth: depth,
-          intensity: intensity,
-          displayType: "eq",
-          source: "cwa",
-        });
+            type: "cwa",
+            Title: ReportType,
+            time: time.toLocaleString(),
+            location: location,
+            magnitude: magnitude,
+            depth: depth,
+            intensity: intensity,
+            displayType: "eq",
+            source: "cwa",
+          });
         }
-        
       });
     }
 
@@ -752,7 +753,7 @@ async function fetchCwaTinyData() {
 
     console.log("CWAデータ受信:", data);
     // 既存データをクリア
-    combinedData.cwaEqList_tiny = []; 
+    combinedData.cwaEqList_tiny = [];
 
     // features を抽出
     if (data && Array.isArray(data.records.Earthquake)) {
@@ -1162,8 +1163,8 @@ async function fetchBmkgData() {
           Tanggal: item.Tanggal,
           Jam: item.Jam,
           time: item.DateTime,
-          latitude: lat,
-          longitude: lon,
+          lat: lat,
+          lng: lon,
           magnitude: item.Magnitude,
           depth: item.Kedalaman?.replace(" km", "") || "情報なし",
           location: item.Wilayah,
@@ -1218,8 +1219,8 @@ async function fetchBmkg_M5Data() {
           Tanggal: item.Tanggal,
           Jam: item.Jam,
           time: item.DateTime,
-          latitude: lat,
-          longitude: lon,
+          lat: lat,
+          lng: lon,
           magnitude: item.Magnitude,
           depth: item.Kedalaman?.replace(" km", "") || "情報なし",
           location: item.Wilayah,
@@ -1441,9 +1442,7 @@ function updateCombinedDisplay() {
       html += `<p class="location">震源地: ${item.location}</p>`;
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
-       
-        html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
-      
+      html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
 
       html += `<p>深さ: ${item.depth} km</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）</p>`;
@@ -1467,6 +1466,7 @@ function updateCombinedDisplay() {
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
       html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p>緯度: ${item.lat}, 経度: ${item.lng}: USGS</p>`;
       html += `<p class="source">情報源: USGS</p>`;
     }
     // BMKG地震情報
@@ -2411,6 +2411,8 @@ function startAutoFetch() {
   }
 
   alert(`${interval}秒ごとに自動取得を開始しました`);
+  // 関数を呼び出して地図を表示
+  initMapWithMarkers(map, usgsData);
 }
 
 // 通知設定のイベントリスナー
@@ -2633,6 +2635,53 @@ fetchBmkg_M5Data(); // BMKG M5.0+ 地震情報
 fetchUsgsData();
 initNotifications();
 
-
 // 初回XMLデータ取得
 initialJmaXmlFetch();
+
+// 地図を初期化
+function initMap() {
+  const map = L.map("map").setView([35.6895, 139.6917], 5); // 初期座標（東京）
+
+  // タイルレイヤーを追加
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors",
+  }).addTo(map);
+
+  return map;
+}
+
+function initMapWithMarkers(map, markers) {
+  // 既存のマーカーを削除（FeatureGroupが存在すれば削除）
+  if (markerGroup) {
+    map.removeLayer(markerGroup);
+    markerGroup = null;
+  }
+
+  // 新しいFeatureGroupを作成
+  markerGroup = L.featureGroup();
+
+  // 各マーカーを追加
+  markers.forEach((markerData) => {
+    const marker = L.marker([markerData.lat, markerData.lng])
+      .bindPopup(
+        markerData.time +
+          "<br>" +
+          markerData.location +
+          "<br>" +
+          `<p>M${markerData.magnitude}  深さ: ${markerData.depth} km</p>`
+      )
+      .openPopup();
+
+    markerGroup.addLayer(marker);
+  });
+
+  // マーカーグループを地図に追加
+  map.addLayer(markerGroup);
+
+  // 地図の範囲をマーカーに合わせる
+  if (markers.length > 0) {
+    map.fitBounds(markerGroup.getBounds(), { padding: [50, 50] });
+  }
+}
+// 地図を初期化
+const map = initMap();

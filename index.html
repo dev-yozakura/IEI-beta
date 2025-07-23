@@ -5,6 +5,7 @@
   <head>
     <title>統合地震情報</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   </head>
 
   <body>
@@ -175,6 +176,13 @@
         <p>XML詳細情報を表示します。</p>
       </div>
     </div>
+        <!-- 地図の表示コンテナ -->
+    <div id="map"></div>
+
+    <!-- LeafletのJS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+   
     <div>
       メルカリ震度階級 <span class="intensity-label level-1">1</span
       ><span class="intensity-label level-2">2</span
