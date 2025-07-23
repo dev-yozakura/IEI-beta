@@ -542,3 +542,9 @@ h1 {
   min-height: 150px;
   margin-top: 10px;
 }
+
+/* 地図の表示領域を指定 */
+#map {
+    height: 600px;
+    width: 100%;
+}
