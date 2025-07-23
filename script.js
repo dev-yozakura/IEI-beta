@@ -44,6 +44,7 @@ let lastUpdateTimes = {
   iclEew: null,
   emscEq: null,
   cwaEq: null,
+  cwaEq_tiny: null,
 };
 
 // DOM要素取得
@@ -59,6 +60,7 @@ const sourceIcl = document.getElementById("sourceIcl");
 const sourceUSGS = document.getElementById("sourceUSGS");
 const sourceEMSC = document.getElementById("sourceEMSC");
 const sourceCWA = document.getElementById("sourceCWA");
+const sourceCWA_tiny = document.getElementById("sourceCWA_tiny");
 
 const intervalInput = document.getElementById("intervalInput");
 const startButton = document.getElementById("startButton");
@@ -131,6 +133,7 @@ let ceaEewWs = null;
 let iclEewWs = null;
 let emscEqWs = null;
 let cwaEqWs = null;
+let cwaEqWs_tiny = null;
 
 // 中国地震局（CEA）用変数
 let ceaWs = null;
@@ -334,6 +337,14 @@ function updateJmaEewDisplay(data) {
   updateCombinedDisplay();
 }
 
+//中央気象署（台湾）小区域地震情報表示更新
+function updateCwaTinyEqList(data) {
+  if (data && data.length > 0) {
+    combinedData.cwaEqList_tiny = data;
+  }
+  lastUpdateTimes.cwaEq_tiny = new Date();
+  updateCombinedDisplay();
+}
 // 四川地震局 地震警報表示更新
 function updateScEewDisplay(data) {
   if (data.Cancel) {
@@ -688,7 +699,7 @@ async function fetchCwaData() {
 
     console.log("CWAデータ受信:", data);
     // 既存データをクリア
-    cwaData = [];
+    combinedData.cwaEqList = [];
 
     // features を抽出
     if (data && Array.isArray(data.records.Earthquake)) {
@@ -728,6 +739,55 @@ async function fetchCwaData() {
     updateCombinedDisplay();
   } catch (error) {
     console.error("CWAデータ取得エラー:", error);
+  }
+}
+
+//中央気象署（CWA）小区域地震情報取得
+async function fetchCwaTinyData() {
+  try {
+    const response = await fetch(
+      `https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0016-002?Authorization=${CWA_API_KEY}&format=JSON`
+    );
+    const data = await response.json();
+
+    console.log("CWAデータ受信:", data);
+    // 既存データをクリア
+    combinedData.cwaEqList_tiny = []; 
+
+    // features を抽出
+    if (data && Array.isArray(data.records.Earthquake)) {
+      data.records.Earthquake.forEach((item) => {
+        const EarthquakeInfo = item.EarthquakeInfo;
+
+        const time = new Date(EarthquakeInfo.OriginTime);
+        const ReportType = item.ReportType || "情報なし";
+
+        const magnitude = EarthquakeInfo.EarthquakeMagnitude.MagnitudeValue;
+        const depth = EarthquakeInfo.FocalDepth;
+        const location = EarthquakeInfo.Epicenter.Location;
+
+        const ReportContent = item.ReportContent || "情報なし";
+        const match = ReportContent.match(/Highest intensity was \d+/);
+        let highestIntensity = "";
+        if (match) {
+          highestIntensity = match[0];
+          const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
+          combinedData.cwaEqList_tiny.push({
+            type: "cwa_tiny",
+            Title: ReportType,
+            time: time.toLocaleString(),
+            location: location,
+            magnitude: magnitude,
+            depth: depth,
+            intensity: intensity,
+            displayType: "eq",
+            source: "cwa_tiny",
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("CWA小区域データ取得エラー:", error);
   }
 }
 
@@ -1193,6 +1253,7 @@ function updateCombinedDisplay() {
   const showIcl = sourceIcl.checked; // 成都地震局用フィルタ
   const showUSGS = sourceUSGS?.checked ?? false; // ✅ 新しいチェックボックス
   const showCWA = sourceCWA?.checked; // ✅ 新しいチェックボックス
+  const showCWA_Tiny = sourceCWA_tiny?.checked; // ✅ 新しいチェックボックス
 
   // ソート条件の取得
   const sortCriteria = document.getElementById("sortCriteria").value;
@@ -1240,6 +1301,20 @@ function updateCombinedDisplay() {
         allData.push({
           ...item,
           source: "cwa",
+          displayType: "eq",
+        });
+      }
+    });
+  }
+
+  // 中央気象署（台湾）小区域地震情報
+  if (showCWA_Tiny && combinedData.cwaEqList_tiny) {
+    Object.values(combinedData.cwaEqList_tiny).forEach((item) => {
+      // typeフィールドを除外
+      if (item) {
+        allData.push({
+          ...item,
+          source: "cwa_tiny",
           displayType: "eq",
         });
       }
@@ -1372,6 +1447,16 @@ function updateCombinedDisplay() {
 
       html += `<p>深さ: ${item.depth} km</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）</p>`;
+    }
+    // 中央気象署（台湾）小区域地震情報
+    else if (item.source === "cwa_tiny" && item.displayType === "eq") {
+      html += `<h3>${item.Title}</h3>`;
+      html += `<p class="time">発生時刻: ${item.time}</p>`;
+      html += `<p class="location">震源地: ${item.location}</p>`;
+      html += `<p>マグニチュード: ${item.magnitude}</p>`;
+      html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
+      html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p class="source">情報源: 中央気象署（台湾）小区域地震情報</p>`;
     }
     // USGS 地震情報
     if (item.source === "usgs" && item.displayType === "eq") {
@@ -1678,6 +1763,12 @@ sourceUSGS.addEventListener("change", () => {
 
 sourceCWA.addEventListener("change", () => {
   if (sourceCWA.checked) fetchCwaData(); // ✅ CWAデータを再取得
+  updateCombinedDisplay(); // ✅ 統合表示更新
+});
+
+// イベントリスナー（CWA Tinyチェックボックス）
+sourceCWA_tiny.addEventListener("change", () => {
+  if (sourceCWA_tiny.checked) fetchCwaTinyData(); // ✅ CWA Tinyデータを再取得
   updateCombinedDisplay(); // ✅ 統合表示更新
 });
 
@@ -2299,6 +2390,8 @@ function startAutoFetch() {
     fetchUsgsData(); // ✅ USGSデータを定期取得
     // CWA 地震情報
     fetchCwaData(); // ✅ CWAデータを定期取得
+    // CWA Tiny 地震情報
+    fetchCwaTinyData(); // ✅ CWA Tinyデータを定期取得
   }, interval * 1000);
 
   // 初回取得（接続済みのデータソースのみ）
@@ -2310,7 +2403,8 @@ function startAutoFetch() {
   if (connections.emscEq) emscEqWs.send("query_emsc_eqlist");
   if (connections.ceaEew) ceaEewWs.send("query_ceaeew");
   if (connections.iclEew) iclEewWs.send("query_icleew");
-  if (connections.cwa) cwaEqWs.send("query_cwa");
+  if (connections.cwaEq) cwaEqWs.send("query_cwa");
+  if (connections.cwaEq_tiny) cwaEqWs_tiny.send("query_cwa_tiny");
   // 初回XML取得
   if (!jmaXmlLastUpdate) {
     fetchJmaXmlData();
