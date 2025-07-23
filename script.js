@@ -3,7 +3,7 @@ let combinedData = {
   jmaEew: null,
   scEew: null,
   fjEew: null,
-  jmaEqList: {},
+  jmaEqList: [],
   cencEqList: {},
   emscEqList: {},
   cwaEqList: [],
@@ -1520,6 +1520,8 @@ function updateCombinedDisplay() {
       }
 
       html += `<p>深さ: ${item.depth} </p>`;
+      html += `<span>緯度: ${item.latitude}, 経度: ${item.longitude}</span><br>`;
+
       html += `<p class="source">情報源: 日本気象庁</p>`;
     }
 
@@ -2662,15 +2664,20 @@ function initMapWithMarkers(map, markers) {
 
   // 各マーカーを追加
   markers.forEach((markerData) => {
-    const marker = L.marker([markerData.lat, markerData.lng])
-      .bindPopup(
-        markerData.time +
-          "<br>" +
-          markerData.location +
-          "<br>" +
-          `<p>M${markerData.magnitude}  深さ: ${markerData.depth} km</p>`
-      )
-      .openPopup();
+    const marker = L.marker([
+      markerData.lat || markerData.latitude,
+      markerData.lng || markerData.longitude,
+    ]).bindPopup(
+      (markerData.time || markerData.OriginTime) +
+        "<br>" +
+        (markerData.location ||
+          markerData.HypoCenter ||
+          markerData.Hypocenter) +
+        "<br>" +
+        `<p>M${markerData.magnitude || markerData.Magunitude}  深さ: ${
+          markerData.depth || markerData.Depth
+        } km</p>`
+    );
 
     markerGroup.addLayer(marker);
   });
