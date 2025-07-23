@@ -114,13 +114,13 @@ let jmaXmlLastUpdate = null;
 const xmlCache = {}; // XML詳細情報のキャッシュ用
 
 // BMKG地震情報データ
-let bmkgData = [];
+
 let bmkgLastUpdate = null;
 // BMKG M5.0+ 地震情報用変数
-let bmkg_M5Data = [];
+
 let bmkg_M5LastUpdate = null;
 // USGS 地震情報用変数
-let usgsData = [];
+
 let usgsLastUpdate = null;
 // 中央気象署（台湾）用変数
 const CWA_API_KEY = "CWA-1D4B4F6B-A52D-4CC0-9478-5C9AE9D7270A"; // CWA APIキー
@@ -462,7 +462,8 @@ function connectCea() {
   ceaEewWs = new WebSocket("wss://ws.fanstudio.tech/cea");
 
   ceaEewWs.onopen = () => {
-    connections.cea = true;
+    connections.ceaEew = true;
+    ceaEewWs.send("query_cea");
     ceaStatus.textContent = "接続状況: 接続済み";
     ceaStatus.className = "status connected";
 
@@ -561,11 +562,11 @@ function updateCeaDisplay(data) {
         <div class="earthquake-info">
             <strong>地震情報（CEA）</strong><br>
             <span class="time">発生時刻: ${data.shockTime}</span><br>
-            <span class="time">発表時刻: ${data.updateTime}</span><br>
             <span class="location">震源地: ${data.placeName}</span><br>
             <span>マグニチュード: ${data.magnitude}</span><br>
             <span>最大烈度: ${getIntersityLabel(data.epiIntensity)}</span><br>
             <span>深さ: ${data.depth} km</span><br>
+            <span>緯度: ${data.latitude}° 経度: ${data.longitude}°</span><br>
             <span class="source">情報源: 中国地震局（CEA）</span>
         </div>
     `;
@@ -1539,7 +1540,7 @@ function updateCombinedDisplay() {
       }
 
       html += `<p>深さ: ${item.depth} </p>`;
-      html += `<span>緯度: ${item.latitude}, 経度: ${item.longitude}</span><br>`;
+      html += `<p>緯度: ${item.latitude}, 経度: ${item.longitude}</p>`;
 
       html += `<p class="source">情報源: 日本気象庁</p>`;
     }
@@ -1635,7 +1636,6 @@ function updateCombinedDisplay() {
     if (item.source === "cea" && item.displayType === "eq") {
       html += `<h3>中国地震局（CEA）</h3>`;
       html += `<p class="time">発生時刻: ${item.shockTime}</p>`;
-      html += `<p class="time">発表時刻: ${item.updateTime}</p>`;
       html += `<p class="location">震源地: ${item.placeName}</p>`;
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
@@ -1862,6 +1862,8 @@ function updateCeaEewDisplay(data) {
     magnitude: data.magnitude,
     epiIntensity: data.epiIntensity,
     depth: data.depth,
+    lat: data.langitude,
+    lng: data.latitude,
     displayType: "eq",
     source: "cea",
   };
@@ -1871,7 +1873,6 @@ function updateCeaEewDisplay(data) {
   container.innerHTML = `
         <h3>${ceaData.Title}</h3>
         <p class="time">発生時刻: ${ceaData.shockTime}</p>
-        <p class="time">発表時刻: ${ceaData.updateTime}</p>
         <p class="location">震源地: ${ceaData.placeName}</p>
         <p>マグニチュード: ${ceaData.magnitude}</p>
         <p>最大烈度: ${getIntersityLabel(ceaData.epiIntensity)}</p>
@@ -2633,6 +2634,8 @@ fetchBmkgData(); // 修正: 初期取得を追加
 fetchBmkg_M5Data(); // BMKG M5.0+ 地震情報
 fetchUsgsData();
 initNotifications();
+fetchCwaData(); // CWA 地震情報
+fetchCwaTinyData(); // CWA Tiny 地震情報
 
 // 初回XMLデータ取得
 initialJmaXmlFetch();
