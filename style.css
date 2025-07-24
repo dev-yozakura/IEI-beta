@@ -1083,3 +1083,8 @@ input:checked + .slider:before {
 .dark-mode #applyMapSettings:hover {
   background-color: #003d80;
 }
+
+.no-badge {
+  text-align: right;
+  
+}

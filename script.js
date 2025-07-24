@@ -715,7 +715,7 @@ async function fetchCwaData() {
         const time = new Date(EarthquakeInfo.OriginTime);
         const ReportType = item.ReportType || "情報なし";
 
-        const magnitude = EarthquakeInfo.EarthquakeMagnitude.MagnitudeValue;
+        const magnitude = EarthquakeInfo.EarthquakeMagnitude.MagnitudeValue.toFixed(1) || "情報なし";
         const depth = EarthquakeInfo.FocalDepth;
         const location = EarthquakeInfo.Epicenter.Location;
         const lat =
@@ -1526,22 +1526,22 @@ function updateCombinedDisplay() {
     html += `<div class ="stat-card">`;
     html += `<div class ="stat-card-${getMagnitudeInteger(item.magnitude)}">`;
 
-    html += `<p>No. ${index + 1}</p>`;
+    html += `<div class = "no-badge">No. ${index + 1}</div>`;
 
     // 中央気象署（台湾）(tiny含む)地震情報
     if (
       (item.source === "cwa" || item.source === "cwa_tiny") &&
       item.displayType === "eq"
     ) {
-      html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
+      
 
-      //html += `<h3>${item.Title}</h3>`;
+      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
-      html += `<p class="location">震源地: ${item.location}</p>`;
-      html += `<p>マグニチュード: ${item.magnitude}</p>`;
-
+      //html += `<p class="location">震源地: ${item.location}</p>`;
+      //html += `<p>マグニチュード: ${item.magnitude}</p>`;
+html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
       html += `<p>深さ: ${item.depth} km</p>`;
-      html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
+      //html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）</p>`;
     }
 
@@ -1550,18 +1550,18 @@ function updateCombinedDisplay() {
       html += `<h3>${item.Title}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
       html += `<p class="time">最終更新: ${item.updateTime}</p>`;
-      html += `<p class="location">震源地: ${item.location}</p>`;
-      html += `<p>マグニチュード: ${item.magnitude}</p>`;
+      //html += `<p class="location">震源地: ${item.location}</p>`;
+      //html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
       html += `<p>深さ: ${item.depth} km</p>`;
-      html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
+     // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: USGS</p>`;
     }
     // BMKG地震情報
     if (item.source === "bmkg" && item.displayType === "eq") {
-      html += `<h3>${item.Title}</h3>`;
-      html += `<p class="time">発生時刻: ${item.Tanggal} ${item.Jam}</p>`;
-      html += `<p class="location">震源地: ${item.location}</p>`;
+      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
+      //html += `<p class="time">発生時刻: ${item.Tanggal} ${item.Jam}</p>`;
+      //html += `<p class="location">震源地: ${item.location}</p>`;
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
       // 震度表示
@@ -1583,10 +1583,10 @@ function updateCombinedDisplay() {
 
     // BMKG M5.0+ 地震情報
     if (item.source === "bmkg_m5" && item.displayType === "eq") {
-      html += `<h3>${item.Title}</h3>`;
+      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
       html += `<p class="time">発生時刻: ${item.Tanggal} ${item.Jam}</p>`;
-      html += `<p class="location">震源地: ${item.location}</p>`;
-      html += `<p>マグニチュード: ${item.magnitude}</p>`;
+      //html += `<p class="location">震源地: ${item.location}</p>`;
+      //html += `<p>マグニチュード: ${item.magnitude}</p>`;
       html += `<p>深さ: ${item.depth} km</p>`;
 
       // 津波の可能性（Potensi → tsunamiPotential）
@@ -1596,10 +1596,10 @@ function updateCombinedDisplay() {
 
     // JMA地震情報リスト
     if (item.source === "jma" && item.displayType === "eq") {
-      html += `<h3>${item.Title}</h3>`;
+      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
       html += `<p class="time">発生時刻: ${item.time_full}</p>`;
-      html += `<p class="location">震源地: ${item.location}</p>`;
-      html += `<p>マグニチュード: ${item.magnitude}</p>`;
+      //html += `<p class="location">震源地: ${item.location}</p>`;
+      //html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
       if (item.shindo) {
         html += `<p>最大震度: ${getIntersityLabel_j(item.shindo)}</p>`;
@@ -1608,7 +1608,7 @@ function updateCombinedDisplay() {
       }
 
       html += `<p>深さ: ${item.depth} </p>`;
-      html += `<p>緯度: ${item.latitude}, 経度: ${item.longitude}</p>`;
+      //html += `<p>緯度: ${item.latitude}, 経度: ${item.longitude}</p>`;
 
       html += `<p class="source">情報源: 日本気象庁</p>`;
     }
@@ -1655,13 +1655,13 @@ function updateCombinedDisplay() {
     // JMA地震情報リスト表示
     else if (item.type === "automatic" || item.type === "reviewed") {
       if (item.MaxIntensity) {
-        html += `<h3>${item.Title}</h3>`;
+        html += `<h3>${item.magnitude}${item.location}</h3>`;
       } else if (item.intensity) {
-        html += `<h3>地震情報</h3>`;
+        html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
       }
       html += `<p class="time">発生時刻: ${item.time_full || item.time}</p>`;
-      html += `<p class="location">震源地: ${item.location}</p>`;
-      html += `<p>マグニチュード: ${item.magnitude}</p>`;
+     // html += `<p class="location">震源地: ${item.location}</p>`;
+      //html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
       // 震度表示
       if (item.shindo) {
@@ -2589,7 +2589,7 @@ function parseJmaXmlDetail(xml) {
     html += `<h4>地震詳細情報</h4>`;
     html += `<p>発生時刻: ${originTime}</p>`;
     html += `<p>震源地: ${hypocenter}</p>`;
-    html += `<p>緯度: ${lat}, 経度: ${lon}</p>`;
+    //html += `<p>緯度: ${lat}, 経度: ${lon}</p>`;
     html += `<p>マグニチュード: ${mag}</p>`;
   }
 
