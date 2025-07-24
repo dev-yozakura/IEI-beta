@@ -1445,20 +1445,24 @@ function updateCombinedDisplay() {
     combinedStatus.textContent = "最新更新: データがありません";
     return;
   }
-const countElement = document.getElementById('count');
+  const countElement = document.getElementById("count");
 
-// アイテム数を表示
-countElement.textContent = allData.length;
+  // アイテム数を表示
+  countElement.textContent = allData.length;
 
   // 各項目を表示
-  allData.forEach((item,index) => {
+  allData.forEach((item, index) => {
     const container = document.createElement("div");
     container.className = "earthquake-item";
 
     let html = "";
-    html += `<p>No. ${index + 1}.</p>`;
-    // 中央気象署（台湾）地震情報
-    if (item.source === "cwa" && item.displayType === "eq") {
+    html += `<div class ="stat-card">`;
+    html += `<p>No. ${index + 1}</p>`;
+    // 中央気象署（台湾）(tiny含む)地震情報
+    if (
+      (item.source === "cwa" || item.source === "cwa_tiny") &&
+      item.displayType === "eq"
+    ) {
       html += `<h3>${item.Title}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
       html += `<p class="location">震源地: ${item.location}</p>`;
@@ -1470,17 +1474,7 @@ countElement.textContent = allData.length;
       html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）</p>`;
     }
-    // 中央気象署（台湾）小区域地震情報
-    else if (item.source === "cwa_tiny" && item.displayType === "eq") {
-      html += `<h3>${item.Title}</h3>`;
-      html += `<p class="time">発生時刻: ${item.time}</p>`;
-      html += `<p class="location">震源地: ${item.location}</p>`;
-      html += `<p>マグニチュード: ${item.magnitude}</p>`;
-      html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
-      html += `<p>深さ: ${item.depth} km</p>`;
-      html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
-      html += `<p class="source">情報源: 中央気象署（台湾）小区域地震情報</p>`;
-    }
+
     // USGS 地震情報
     if (item.source === "usgs" && item.displayType === "eq") {
       html += `<h3>${item.Title}</h3>`;
@@ -2246,7 +2240,6 @@ function connectJmaEqList() {
   };
 
   combinedData.jmaEqList = []; // 初期化
-
 }
 
 // 中国地震台網 地震情報リスト接続関数
@@ -2644,42 +2637,71 @@ fetchCwaTinyData(); // CWA Tiny 地震情報
 // 初回XMLデータ取得
 initialJmaXmlFetch();
 
-// 地図を初期化
+let map;
+// 地図を初期化 (修正箇所 3: 既存の地図があれば削除)
 function initMap() {
-  const map = L.map("map").setView([35.6895, 0], 1); // 初期座標（東京）
+  // 既存の地図があれば削除
+  if (map) {
+    map.remove();
+    console.log("既存の地図を削除しました");
+  }
+
+  console.log("地図を初期化中...");
+  map = L.map("map").setView([35.6895, 0], 1); // 初期座標（東京）
 
   // タイルレイヤーを追加
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "© OpenStreetMap contributors",
+    attribution: "© OpenStreetMap",
   }).addTo(map);
-  // 2. プレート境界をGeoJSONで追加
-fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json')
-  .then(res => res.json())
-  .then(data => {
-    L.geoJSON(data, {
-      color: "blue",
-      weight: 2,
-      opacity: 0.8,
-      dashArray: "5,5"
-    }).addTo(map);
-  });
-  return map;
+  console.log("タイルレイヤーを追加しました");
 
+  // 2. プレート境界をGeoJSONで追加
+  fetch(
+    "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json"
+  )
+    .then((res) => {
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      return res.json();
+    })
+    .then((data) => {
+      L.geoJSON(data, {
+        color: "blue",
+        weight: 2,
+        opacity: 0.8,
+        dashArray: "5,5",
+      }).addTo(map);
+      console.log("プレート境界を追加しました");
+    })
+    .catch((error) => {
+      // エラーが発生しても地図の表示は継続
+      console.error("プレート境界データの読み込みエラー:", error);
+    });
+
+  console.log("地図の初期化が完了しました");
+  return map;
 }
 
 function getIconSize(magnitude) {
   // マグニチュードに応じてアイコンサイズを計算
   const baseSize = 7;
   const scaleFactor = 2;
-  const size = baseSize + ( Math.pow(magnitude, 2));
+  const size = baseSize + Math.pow(magnitude, 2);
   return [size, size];
 }
 
 function initMapWithMarkers(map, markers) {
+  if (!map) {
+    console.warn("initMapWithMarkers: 地図が初期化されていません");
+    return;
+  }
+
   // 既存のマーカーを削除
   if (markerGroup) {
     map.removeLayer(markerGroup);
     markerGroup = null;
+    console.log("既存のマーカーグループを削除しました");
   }
 
   // 新しいFeatureGroupを作成
@@ -2692,50 +2714,229 @@ function initMapWithMarkers(map, markers) {
     const lat = markerData.lat || markerData.latitude;
     const lng = markerData.lng || markerData.longitude;
 
+    // 緯度経度が無効な場合はマーカーを作成しない
+    if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
+      console.warn("無効な緯度経度のためマーカーを作成しません:", markerData);
+      return null;
+    }
+
     const customIcon = L.icon({
-      iconUrl: 'https://illust8.com/wp-content/uploads/2018/08/mark_batsu_illust_898.png',
+      iconUrl:
+        "https://illust8.com/wp-content/uploads/2018/08/mark_batsu_illust_898.png",
       iconSize: iconSize,
-      iconAnchor: [iconSize[0]/2, iconSize[1]],
-      popupAnchor: [0, -iconSize[1]]
+      iconAnchor: [iconSize[0] / 2, iconSize[1]],
+      popupAnchor: [0, -iconSize[1]],
     });
 
     return L.marker([lat, lng], { icon: customIcon }).bindPopup(
-      (markerData.time || markerData.OriginTime) +
+      (markerData.time || markerData.OriginTime || "時間不明") +
         "<br>" +
-        (markerData.location || markerData.HypoCenter || markerData.Hypocenter) +
+        (markerData.location ||
+          markerData.HypoCenter ||
+          markerData.Hypocenter ||
+          "場所不明") +
         "<br>" +
-        `<p>M${magnitude}  深さ: ${markerData.depth || markerData.Depth} km</p>`
+        `<p>M${magnitude}  深さ: ${
+          markerData.depth || markerData.Depth || "不明"
+        } km</p>` +
+        `<p>情報源: ${markerData.source || "不明"}</p>`
     );
   }
 
   // すべてのマーカーデータを処理
-  const allMarkers = [...(markers.cwaEqList_tiny || []), ...(markers.cwaEqList || []),  ...(markers.usgsData || [])];
-  
-  allMarkers.forEach(markerData => {
-    markerGroup.addLayer(createMarker(markerData));
+  const allMarkers = [
+    ...(markers.cwaEqList_tiny || []),
+    ...(markers.cwaEqList || []),
+    ...(markers.usgsData || []),
+    // 必要に応じて他のマーカーデータも追加
+    // ...(markers.jmaEqList || []), // 例: JMAデータも追加する場合
+    ...(markers.bmkgData || []),
+    ...(markers.bmkg_M5Data || []),
+    // ...(Object.values(markers.cencEqList || {})),
+    // ...(Object.values(markers.emscEqList || {})),
+  ];
+
+  console.log(`処理対象マーカー数: ${allMarkers.length}`);
+
+  allMarkers.forEach((markerData) => {
+    try {
+      const marker = createMarker(markerData);
+      if (marker) {
+        // createMarkerがnullを返さない場合のみ追加
+        markerGroup.addLayer(marker);
+      }
+    } catch (e) {
+      console.error("マーカー作成中にエラー:", markerData, e);
+    }
   });
 
   map.addLayer(markerGroup);
+  console.log(`マーカーを ${allMarkers.length} 個追加しました`);
 }
-// 地図を初期化
-const map = initMap();
 
+window.addEventListener("load", function () {
+  console.log("ページロード完了イベント発火");
+  try {
+    // 地図を初期化
+    map = initMap();
+    console.log("地図初期化完了");
 
-document.addEventListener("DOMContentLoaded", function () {
-  const tabButtons = document.querySelectorAll(".tab-button");
-  const tabPanes = document.querySelectorAll(".tab-pane");
+    // 少し遅延させて地図のサイズを再計算
+    // DOMが完全にレンダリングされるのを待つため
+    setTimeout(() => {
+      if (map) {
+        console.log("地図サイズを再計算します");
+        map.invalidateSize();
+        console.log("地図サイズ再計算完了");
 
-  tabButtons.forEach(button => {
-    button.addEventListener("click", () => {
-      // すべてのタブのアクティブクラスを削除
-      tabButtons.forEach(btn => btn.classList.remove("active"));
-      tabPanes.forEach(pane => pane.classList.remove("active"));
-
-      // クリックされたタブをアクティブに
-      button.classList.add("active");
-      const targetTab = document.getElementById(button.dataset.tab);
-      targetTab.classList.add("active");
-    });
-  });
+        // 必要に応じて、初期マーカーを表示
+        // (updateCombinedDisplayが自動的に呼び出される場合は不要)
+        // initMapWithMarkers(map, combinedData);
+      }
+    }, 200); // 200msの遅延
+  } catch (error) {
+    console.error("loadイベントでの地図初期化中にエラーが発生しました:", error);
+  }
 });
 
+document.addEventListener("DOMContentLoaded", function () {
+  console.log("DOMContentLoadedイベント発火");
+  const tabButtons = document.querySelectorAll(".tab-btn");
+  const tabContents = document.querySelectorAll(".tab-content");
+  const tabIndicator = document.querySelector(".tab-indicator");
+  const showCwaTinyMarkersInput = document.getElementById("showCwaTinyMarkers");
+  const showCwaMarkersInput = document.getElementById("showCwaMarkers");
+  const showUsgsMarkersInput = document.getElementById("showUsgsMarkers");
+  const showBmkgMarkersInput = document.getElementById("showBmkgMarkers");
+  const showBmkgM5MarkersInput = document.getElementById("showBmkgM5Markers");
+  const showJmaMarkersInput = document.getElementById("showJmaMarkers"); // 例
+  const showCencMarkersInput = document.getElementById("showCencMarkers"); // 例
+  const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
+  const applyMapSettingsButton = document.getElementById("applyMapSettings");
+
+  if (tabButtons.length > 0 && tabContents.length > 0) {
+    // 初期インジケーター位置設定
+    updateIndicator();
+
+    tabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        // アクティブクラスの切り替え
+        tabButtons.forEach((btn) => btn.classList.remove("active"));
+        tabContents.forEach((content) => content.classList.remove("active"));
+
+        button.classList.add("active");
+        const targetTab = document.getElementById(button.dataset.tab);
+        if (targetTab) {
+          targetTab.classList.add("active");
+        } else {
+          console.warn(`タブコンテンツが見つかりません: ${button.dataset.tab}`);
+        }
+
+        // インジケーターの更新
+        updateIndicator();
+
+        // 修正箇所 5: タブ切り替え時に地図サイズを再計算
+        if (map) {
+          console.log("タブ切り替え: 地図サイズを再計算します");
+          // タブ切り替えアニメーションの後に実行するため、少し遅延させる
+          setTimeout(() => {
+            map.invalidateSize();
+            console.log("タブ切り替え: 地図サイズ再計算完了");
+          }, 100); // 100msの遅延
+        }
+      });
+    });
+
+    // --- 地図設定のロード ---
+function loadMapMarkerSettings() {
+    const savedSettings = localStorage.getItem('mapMarkerSettings');
+    if (savedSettings) {
+        try {
+            mapMarkerSettings = JSON.parse(savedSettings);
+        } catch (e) {
+            console.error("保存された地図設定の読み込みに失敗しました:", e);
+        }
+    }
+
+    // UIに設定を反映 (input要素のcheckedプロパティを設定)
+    if (showCwaTinyMarkersInput) showCwaTinyMarkersInput.checked = mapMarkerSettings.cwaEqList_tiny ?? true;
+    if (showCwaMarkersInput) showCwaMarkersInput.checked = mapMarkerSettings.cwaEqList ?? true;
+    if (showUsgsMarkersInput) showUsgsMarkersInput.checked = mapMarkerSettings.usgsData ?? true;
+    if (showBmkgMarkersInput) showBmkgMarkersInput.checked = mapMarkerSettings.bmkgData ?? true;
+    if (showBmkgM5MarkersInput) showBmkgM5MarkersInput.checked = mapMarkerSettings.bmkg_M5Data ?? true;
+    if (showJmaMarkersInput) showJmaMarkersInput.checked = mapMarkerSettings.jmaEqList ?? false; // 例
+    if (showCencMarkersInput) showCencMarkersInput.checked = mapMarkerSettings.cencEqList ?? false; // 例
+    if (showEmscMarkersInput) showEmscMarkersInput.checked = mapMarkerSettings.emscEqList ?? false; // 例
+}
+
+// --- 地図設定の保存 ---
+function saveMapMarkerSettings() {
+    localStorage.setItem('mapMarkerSettings', JSON.stringify(mapMarkerSettings));
+}
+
+// --- 地図設定の適用 ---
+function applyMapMarkerSettings() {
+    // UIから設定を取得 (input要素のcheckedプロパティから取得)
+    if (showCwaTinyMarkersInput) mapMarkerSettings.cwaEqList_tiny = showCwaTinyMarkersInput.checked;
+    if (showCwaMarkersInput) mapMarkerSettings.cwaEqList = showCwaMarkersInput.checked;
+    if (showUsgsMarkersInput) mapMarkerSettings.usgsData = showUsgsMarkersInput.checked;
+    if (showBmkgMarkersInput) mapMarkerSettings.bmkgData = showBmkgMarkersInput.checked;
+    if (showBmkgM5MarkersInput) mapMarkerSettings.bmkg_M5Data = showBmkgM5MarkersInput.checked;
+    if (showJmaMarkersInput) mapMarkerSettings.jmaEqList = showJmaMarkersInput.checked; // 例
+    if (showCencMarkersInput) mapMarkerSettings.cencEqList = showCencMarkersInput.checked; // 例
+    if (showEmscMarkersInput) mapMarkerSettings.emscEqList = showEmscMarkersInput.checked; // 例
+
+    // 設定を保存
+    saveMapMarkerSettings();
+
+    // マーカーを再描画
+    if (map) {
+         console.log("地図設定が変更されたため、マーカーを再描画します");
+         initMapWithMarkers(map, combinedData);
+         // サイズ再計算も行っておく
+         setTimeout(() => map.invalidateSize(), 100);
+    } else {
+         console.warn("地図が初期化されていないため、マーカーの再描画をスキップします");
+    }
+}
+
+// 初期設定をロード
+loadMapMarkerSettings();
+
+// 設定適用ボタンのイベントリスナー
+if (applyMapSettingsButton) {
+    applyMapSettingsButton.addEventListener('click', applyMapMarkerSettings);
+    console.log("地図設定適用ボタンのイベントリスナーを追加しました");
+} else {
+    console.warn("地図設定適用ボタン (#applyMapSettings) が見つかりません");
+}
+     // トグルスイッチの変更イベントリスナー (オプション: 即時反映)
+    // すべてのinput要素に対してイベントリスナーを追加
+    
+    function updateIndicator() {
+      const activeButton = document.querySelector(".tab-btn.active");
+      if (activeButton && tabIndicator) {
+        const buttonRect = activeButton.getBoundingClientRect();
+        const containerRect =
+          activeButton.parentElement.getBoundingClientRect();
+
+        tabIndicator.style.width = `${buttonRect.width}px`;
+        tabIndicator.style.left = `${buttonRect.left - containerRect.left}px`;
+      }
+    }
+
+    // 修正箇所 6: ウィンドウリサイズ時にインジケーターと地図サイズを更新
+    window.addEventListener("resize", function () {
+      updateIndicator();
+      if (map) {
+        console.log("ウィンドウリサイズ: 地図サイズを再計算します");
+        map.invalidateSize();
+        console.log("ウィンドウリサイズ: 地図サイズ再計算完了");
+      }
+    });
+  } else {
+    console.log("タブ要素が見つかりませんでした");
+  }
+
+  // ... 既存の他の DOMContentLoaded 内の処理 ...
+});

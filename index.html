@@ -1,28 +1,38 @@
 <!DOCTYPE html>
 <html>
   <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <head>
     <title>統合地震情報</title>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="script.js" defer></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 
 
   </head>
 
   <body>
-    <h1>統合地震情報</h1>
-<div class="tab-container">
-  <div class="tab-header">
-    <button class="tab-button active" data-tab="tab1">タブ1</button>
-    <button class="tab-button" data-tab="tab2">タブ2</button>
-    <button class="tab-button" data-tab="tab3">タブ3</button>
+    
+<div class="fancy-tab-container">
+  <div class="tab-navigation">
+    <button class="tab-btn active" data-tab="tab1">
+      <span class="tab-icon">🌍</span>
+      <span class="atab-text">統合地震情報</span>
+    </button>
+    <button class="tab-btn" data-tab="tab2">
+      <span class="tab-icon">🗺</span>
+      <span class="tab-text">地図</span>
+    </button>
+    <button class="tab-btn" data-tab="tab3">
+      <span class="tab-icon">⚙</span>
+      <span class="tab-text">設定</span>
+    </button>
+    <div class="tab-indicator"></div>
   </div>
 
-  <div class="tab-content">
-    <div id="tab1" class="tab-pane active">
+  <div class="tab-content-wrapper">
+    <div id="tab1" class="tab-content active">
       <!-- フィルターコントロール（拡張版） -->
     <div class="controls">
       <!-- 一括操作ボタン -->
@@ -142,10 +152,7 @@
     </div>
 
     <!-- 統合地震情報 -->
-    <div
-      class="section"
-      style="background-color: #fff8f0; border-left-color: #e74c3c"
-    >
+    <div class="content-card">
       <div class="section-title">統合地震情報</div>
       <p>受信数: <span id="count"></span>個</p>
   <ul id="output"></ul>
@@ -190,11 +197,7 @@
         <p>XML詳細情報を表示します。</p>
       </div>
     </div>
-        <!-- 地図の表示コンテナ -->
-    <div id="map"></div>
-
-    <!-- LeafletのJS -->
-    
+      
    
     <div>
       メルカリ震度階級 <span class="intensity-label level-1">1</span
@@ -218,17 +221,94 @@
     ><span class="intensity-label_j level-6">6</span
     ><span class="intensity-label_j level-7">7</span>
     </div>
-    <div id="tab2" class="tab-pane">
-      <h2>タブ2の内容</h2>
-      <p>これはタブ2のコンテンツです。</p>
-    </div>
-    <div id="tab3" class="tab-pane">
-      <h2>タブ3の内容</h2>
-      <p>これはタブ3のコンテンツです。</p>
+    
+  </div>
+  <div id="tab2" class="tab-content">
+    <div class="content-card">
+        <!-- 地図の表示コンテナ -->
+    <div id="map"></div>
+
+    <!-- LeafletのJS -->
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     </div>
   </div>
+   <div id="tab3" class="tab-content">
+                <div class="content-card">
+                   <!-- この部分は既存の tab3 内のコントロールセクションに追加してください -->
+<div class="map-controls">
+  <h4>地図表示設定</h4>
+  
+  <div class="toggle-container">
+    <label class="toggle-label" for="showCwaTinyMarkers">CWA 小区域地震</label>
+    <label class="switch">
+      <input type="checkbox" id="showCwaTinyMarkers" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+  
+  <div class="toggle-container">
+    <label class="toggle-label" for="showCwaMarkers">CWA 地震</label>
+    <label class="switch">
+      <input type="checkbox" id="showCwaMarkers" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+  
+  <div class="toggle-container">
+    <label class="toggle-label" for="showUsgsMarkers">USGS 地震</label>
+    <label class="switch">
+      <input type="checkbox" id="showUsgsMarkers" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+  
+  <div class="toggle-container">
+    <label class="toggle-label" for="showBmkgMarkers">BMKG 地震</label>
+    <label class="switch">
+      <input type="checkbox" id="showBmkgMarkers" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+  
+  <div class="toggle-container">
+    <label class="toggle-label" for="showBmkgM5Markers">BMKG M5.0+ 地震</label>
+    <label class="switch">
+      <input type="checkbox" id="showBmkgM5Markers" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+  
+  <div class="toggle-container">
+    <label class="toggle-label" for="showJmaMarkers">JMA 地震 (例)</label>
+    <label class="switch">
+      <input type="checkbox" id="showJmaMarkers">
+      <span class="slider"></span>
+    </label>
+  </div>
+  
+  <div class="toggle-container">
+    <label class="toggle-label" for="showCencMarkers">CENC 地震 (例)</label>
+    <label class="switch">
+      <input type="checkbox" id="showCencMarkers">
+      <span class="slider"></span>
+    </label>
+  </div>
+  
+  <div class="toggle-container">
+    <label class="toggle-label" for="showEmscMarkers">EMSC 地震 (例)</label>
+    <label class="switch">
+      <input type="checkbox" id="showEmscMarkers">
+      <span class="slider"></span>
+    </label>
+  </div>
+  
+  <button id="applyMapSettings">設定を適用</button>
+</div>
+                </div>
+            </div>
 </div>
     
+    <script src="script.js" defer></script>
 
   </body>
 </html>
