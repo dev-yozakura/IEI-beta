@@ -604,7 +604,7 @@ body {
 
 .fancy-tab-container {
   width: 100%;
-  max-width: 800px;
+  max-width: 100vw;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   border-radius: 20px;
@@ -624,7 +624,7 @@ body {
 
 .tab-btn {
   flex: 1;
-  padding: 20px 15px;
+  padding: 10px 15px;
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.7);
@@ -669,7 +669,7 @@ body {
 
 /* コンテンツ */
 .tab-content-wrapper {
-  padding: 30px;
+  padding: 0px;
 }
 
 .tab-content {
