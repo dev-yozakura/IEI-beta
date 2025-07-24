@@ -665,7 +665,7 @@ async function fetchUsgsData() {
         ];
         const lon = coordinates[0]?.toFixed(4) || "情報なし";
         const lat = coordinates[1]?.toFixed(4) || "情報なし";
-        const depth = coordinates[2]?.toFixed(4) || "情報なし";
+        const depth = coordinates[2]?.toFixed(2) || "情報なし";
 
         // マグニチュードの変換
         const magnitude =
@@ -923,6 +923,69 @@ function getDepthNumber(Depth) {
   return isNaN(num) ? 0 : num;
 }
 
+function getMagnitudeInteger(magnitude) {
+  // magnitude が null, undefined, 空文字の場合は 0 を返す
+  if (magnitude === null || magnitude === undefined || magnitude === "") {
+    return 0;
+  }
+
+  // すでに数値型であれば、整数に変換
+  if (typeof magnitude === "number") {
+    return Math.floor(Math.abs(magnitude)); // 負数の場合は絶対値を取る
+  }
+
+  // 文字列型の場合、数値に変換を試みる
+  if (typeof magnitude === "string") {
+    // "M5.4" のような形式から数値部分を抽出
+    const match = magnitude.match(/[\d.]+/);
+    if (match) {
+      const num = parseFloat(match[0]);
+      if (!isNaN(num)) {
+        return Math.floor(Math.abs(num)); // 負数の場合は絶対値を取る
+      }
+    }
+    // 数値部分が抽出できない場合、0 を返す
+    return 0;
+  }
+
+  // その他の型の場合は 0 を返す
+  return 0;
+}
+
+function getIntensityInteger(intensity) {
+  // intensity が null, undefined, 空文字の場合は 0 を返す
+  if (intensity === null || intensity === undefined || intensity === "") {
+    return 0;
+  }
+
+  // すでに数値型であれば、整数に変換
+  if (typeof intensity === "number") {
+    return Math.floor(Math.abs(intensity)); // 負数の場合は絶対値を取る
+  }
+
+  // 文字列型の場合、数値に変換を試みる
+  if (typeof intensity === "string") {
+    // "V" や "VI" のような形式から数値部分を抽出
+    const romanToNumber = {
+      "I": 1,
+      "II": 2,
+      "III": 3,
+      "IV": 4,    
+      "V": 5,
+      "VI": 6,
+      "VII": 7,
+      "VIII": 8,
+      "IX": 9,
+      "X": 10
+    };
+    if (intensity in romanToNumber) {
+      return romanToNumber[intensity];
+    }
+  }
+
+  return 0;
+}
+
 // 震度ラベル取得関数（小数値か整数値かで分岐）
 function getIntersityLabel(intensity) {
   if (!intensity) return "";
@@ -1172,6 +1235,10 @@ async function fetchBmkgData() {
         );
         const intensity = intensityMatch?.[0]?.trim() || "情報なし";
 
+        const locationMatch = item.Wilayah?.match(
+          /Pusat\s*gempa\s*berada\s*di\s*(.*)/iu
+        );
+        const location = locationMatch?.[1]?.trim() || "情報なし";
         // 地震情報を統一構造に変換
         combinedData.bmkgData.push({
           type: "bmkg",
@@ -1183,7 +1250,7 @@ async function fetchBmkgData() {
           lng: lon,
           magnitude: item.Magnitude,
           depth: item.Kedalaman?.replace(" km", "") || "情報なし",
-          location: item.Wilayah,
+          location: location,
           intensity: intensity,
           feltDetails: item.Dirasakan,
           displayType: "eq",
@@ -1457,18 +1524,21 @@ function updateCombinedDisplay() {
 
     let html = "";
     html += `<div class ="stat-card">`;
+    html += `<div class ="stat-card-${getMagnitudeInteger(item.magnitude)}">`;
+    
     html += `<p>No. ${index + 1}</p>`;
+
     // 中央気象署（台湾）(tiny含む)地震情報
     if (
       (item.source === "cwa" || item.source === "cwa_tiny") &&
       item.displayType === "eq"
     ) {
-      html += `<h3>${item.Title}</h3>`;
+      html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
+
+      //html += `<h3>${item.Title}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
       html += `<p class="location">震源地: ${item.location}</p>`;
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
-
-      html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
 
       html += `<p>深さ: ${item.depth} km</p>`;
       html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
@@ -2752,7 +2822,7 @@ function initMapWithMarkers(map, markers) {
     // ...(markers.jmaEqList || []), // 例: JMAデータも追加する場合
     ...(markers.bmkgData || []),
     ...(markers.bmkg_M5Data || []),
-    // ...(Object.values(markers.cencEqList || {})),
+     ...(Object.values(markers.cencEqList || {})),
     // ...(Object.values(markers.emscEqList || {})),
   ];
 
@@ -2848,71 +2918,93 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // --- 地図設定のロード ---
-function loadMapMarkerSettings() {
-    const savedSettings = localStorage.getItem('mapMarkerSettings');
-    if (savedSettings) {
+    function loadMapMarkerSettings() {
+      const savedSettings = localStorage.getItem("mapMarkerSettings");
+      if (savedSettings) {
         try {
-            mapMarkerSettings = JSON.parse(savedSettings);
+          mapMarkerSettings = JSON.parse(savedSettings);
         } catch (e) {
-            console.error("保存された地図設定の読み込みに失敗しました:", e);
+          console.error("保存された地図設定の読み込みに失敗しました:", e);
         }
+      }
+
+      // UIに設定を反映 (input要素のcheckedプロパティを設定)
+      if (showCwaTinyMarkersInput)
+        showCwaTinyMarkersInput.checked =
+          mapMarkerSettings.cwaEqList_tiny ?? true;
+      if (showCwaMarkersInput)
+        showCwaMarkersInput.checked = mapMarkerSettings.cwaEqList ?? true;
+      if (showUsgsMarkersInput)
+        showUsgsMarkersInput.checked = mapMarkerSettings.usgsData ?? true;
+      if (showBmkgMarkersInput)
+        showBmkgMarkersInput.checked = mapMarkerSettings.bmkgData ?? true;
+      if (showBmkgM5MarkersInput)
+        showBmkgM5MarkersInput.checked = mapMarkerSettings.bmkg_M5Data ?? true;
+      if (showJmaMarkersInput)
+        showJmaMarkersInput.checked = mapMarkerSettings.jmaEqList ?? false; // 例
+      if (showCencMarkersInput)
+        showCencMarkersInput.checked = mapMarkerSettings.cencEqList ?? false; // 例
+      if (showEmscMarkersInput)
+        showEmscMarkersInput.checked = mapMarkerSettings.emscEqList ?? false; // 例
     }
 
-    // UIに設定を反映 (input要素のcheckedプロパティを設定)
-    if (showCwaTinyMarkersInput) showCwaTinyMarkersInput.checked = mapMarkerSettings.cwaEqList_tiny ?? true;
-    if (showCwaMarkersInput) showCwaMarkersInput.checked = mapMarkerSettings.cwaEqList ?? true;
-    if (showUsgsMarkersInput) showUsgsMarkersInput.checked = mapMarkerSettings.usgsData ?? true;
-    if (showBmkgMarkersInput) showBmkgMarkersInput.checked = mapMarkerSettings.bmkgData ?? true;
-    if (showBmkgM5MarkersInput) showBmkgM5MarkersInput.checked = mapMarkerSettings.bmkg_M5Data ?? true;
-    if (showJmaMarkersInput) showJmaMarkersInput.checked = mapMarkerSettings.jmaEqList ?? false; // 例
-    if (showCencMarkersInput) showCencMarkersInput.checked = mapMarkerSettings.cencEqList ?? false; // 例
-    if (showEmscMarkersInput) showEmscMarkersInput.checked = mapMarkerSettings.emscEqList ?? false; // 例
-}
+    // --- 地図設定の保存 ---
+    function saveMapMarkerSettings() {
+      localStorage.setItem(
+        "mapMarkerSettings",
+        JSON.stringify(mapMarkerSettings)
+      );
+    }
 
-// --- 地図設定の保存 ---
-function saveMapMarkerSettings() {
-    localStorage.setItem('mapMarkerSettings', JSON.stringify(mapMarkerSettings));
-}
+    // --- 地図設定の適用 ---
+    function applyMapMarkerSettings() {
+      // UIから設定を取得 (input要素のcheckedプロパティから取得)
+      if (showCwaTinyMarkersInput)
+        mapMarkerSettings.cwaEqList_tiny = showCwaTinyMarkersInput.checked;
+      if (showCwaMarkersInput)
+        mapMarkerSettings.cwaEqList = showCwaMarkersInput.checked;
+      if (showUsgsMarkersInput)
+        mapMarkerSettings.usgsData = showUsgsMarkersInput.checked;
+      if (showBmkgMarkersInput)
+        mapMarkerSettings.bmkgData = showBmkgMarkersInput.checked;
+      if (showBmkgM5MarkersInput)
+        mapMarkerSettings.bmkg_M5Data = showBmkgM5MarkersInput.checked;
+      if (showJmaMarkersInput)
+        mapMarkerSettings.jmaEqList = showJmaMarkersInput.checked; // 例
+      if (showCencMarkersInput)
+        mapMarkerSettings.cencEqList = showCencMarkersInput.checked; // 例
+      if (showEmscMarkersInput)
+        mapMarkerSettings.emscEqList = showEmscMarkersInput.checked; // 例
 
-// --- 地図設定の適用 ---
-function applyMapMarkerSettings() {
-    // UIから設定を取得 (input要素のcheckedプロパティから取得)
-    if (showCwaTinyMarkersInput) mapMarkerSettings.cwaEqList_tiny = showCwaTinyMarkersInput.checked;
-    if (showCwaMarkersInput) mapMarkerSettings.cwaEqList = showCwaMarkersInput.checked;
-    if (showUsgsMarkersInput) mapMarkerSettings.usgsData = showUsgsMarkersInput.checked;
-    if (showBmkgMarkersInput) mapMarkerSettings.bmkgData = showBmkgMarkersInput.checked;
-    if (showBmkgM5MarkersInput) mapMarkerSettings.bmkg_M5Data = showBmkgM5MarkersInput.checked;
-    if (showJmaMarkersInput) mapMarkerSettings.jmaEqList = showJmaMarkersInput.checked; // 例
-    if (showCencMarkersInput) mapMarkerSettings.cencEqList = showCencMarkersInput.checked; // 例
-    if (showEmscMarkersInput) mapMarkerSettings.emscEqList = showEmscMarkersInput.checked; // 例
+      // 設定を保存
+      saveMapMarkerSettings();
 
-    // 設定を保存
-    saveMapMarkerSettings();
+      // マーカーを再描画
+      if (map) {
+        console.log("地図設定が変更されたため、マーカーを再描画します");
+        initMapWithMarkers(map, combinedData);
+        // サイズ再計算も行っておく
+        setTimeout(() => map.invalidateSize(), 100);
+      } else {
+        console.warn(
+          "地図が初期化されていないため、マーカーの再描画をスキップします"
+        );
+      }
+    }
 
-    // マーカーを再描画
-    if (map) {
-         console.log("地図設定が変更されたため、マーカーを再描画します");
-         initMapWithMarkers(map, combinedData);
-         // サイズ再計算も行っておく
-         setTimeout(() => map.invalidateSize(), 100);
+    // 初期設定をロード
+    loadMapMarkerSettings();
+
+    // 設定適用ボタンのイベントリスナー
+    if (applyMapSettingsButton) {
+      applyMapSettingsButton.addEventListener("click", applyMapMarkerSettings);
+      console.log("地図設定適用ボタンのイベントリスナーを追加しました");
     } else {
-         console.warn("地図が初期化されていないため、マーカーの再描画をスキップします");
+      console.warn("地図設定適用ボタン (#applyMapSettings) が見つかりません");
     }
-}
-
-// 初期設定をロード
-loadMapMarkerSettings();
-
-// 設定適用ボタンのイベントリスナー
-if (applyMapSettingsButton) {
-    applyMapSettingsButton.addEventListener('click', applyMapMarkerSettings);
-    console.log("地図設定適用ボタンのイベントリスナーを追加しました");
-} else {
-    console.warn("地図設定適用ボタン (#applyMapSettings) が見つかりません");
-}
-     // トグルスイッチの変更イベントリスナー (オプション: 即時反映)
+    // トグルスイッチの変更イベントリスナー (オプション: 即時反映)
     // すべてのinput要素に対してイベントリスナーを追加
-    
+
     function updateIndicator() {
       const activeButton = document.querySelector(".tab-btn.active");
       if (activeButton && tabIndicator) {
