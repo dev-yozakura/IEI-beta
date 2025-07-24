@@ -6,12 +6,24 @@
     <title>統合地震情報</title>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="script.js" defer></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+
   </head>
 
   <body>
     <h1>統合地震情報</h1>
+<div class="tab-container">
+  <div class="tab-header">
+    <button class="tab-button active" data-tab="tab1">タブ1</button>
+    <button class="tab-button" data-tab="tab2">タブ2</button>
+    <button class="tab-button" data-tab="tab3">タブ3</button>
+  </div>
 
-    <!-- フィルターコントロール（拡張版） -->
+  <div class="tab-content">
+    <div id="tab1" class="tab-pane active">
+      <!-- フィルターコントロール（拡張版） -->
     <div class="controls">
       <!-- 一括操作ボタン -->
       <button id="selectAllButton" type="button">すべて表示</button>
@@ -135,6 +147,8 @@
       style="background-color: #fff8f0; border-left-color: #e74c3c"
     >
       <div class="section-title">統合地震情報</div>
+      <p>受信数: <span id="count"></span>個</p>
+  <ul id="output"></ul>
       <div id="combinedEqList">
         <p class="no-data">統合地震情報を読み込んでいます...</p>
       </div>
@@ -180,7 +194,6 @@
     <div id="map"></div>
 
     <!-- LeafletのJS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
    
     <div>
@@ -204,7 +217,18 @@
     ><span class="intensity-label_j level-5">5</span
     ><span class="intensity-label_j level-6">6</span
     ><span class="intensity-label_j level-7">7</span>
+    </div>
+    <div id="tab2" class="tab-pane">
+      <h2>タブ2の内容</h2>
+      <p>これはタブ2のコンテンツです。</p>
+    </div>
+    <div id="tab3" class="tab-pane">
+      <h2>タブ3の内容</h2>
+      <p>これはタブ3のコンテンツです。</p>
+    </div>
+  </div>
+</div>
+    
 
-    <script src="script.js" defer></script>
   </body>
 </html>

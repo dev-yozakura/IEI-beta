@@ -665,11 +665,11 @@ async function fetchUsgsData() {
         ];
         const lon = coordinates[0]?.toFixed(4) || "情報なし";
         const lat = coordinates[1]?.toFixed(4) || "情報なし";
-        const depth = coordinates[2]?.toFixed(1) || "情報なし";
+        const depth = coordinates[2]?.toFixed(4) || "情報なし";
 
         // マグニチュードの変換
         const magnitude =
-          props.mag !== undefined ? props.mag.toFixed(1) : "情報なし";
+          props.mag !== undefined ? props.mag.toFixed(2) : "情報なし";
 
         // 統一構造に変換
         combinedData.usgsData.push({
@@ -1445,14 +1445,18 @@ function updateCombinedDisplay() {
     combinedStatus.textContent = "最新更新: データがありません";
     return;
   }
+const countElement = document.getElementById('count');
+
+// アイテム数を表示
+countElement.textContent = allData.length;
 
   // 各項目を表示
-  allData.forEach((item) => {
+  allData.forEach((item,index) => {
     const container = document.createElement("div");
     container.className = "earthquake-item";
 
     let html = "";
-
+    html += `<p>No. ${index + 1}.</p>`;
     // 中央気象署（台湾）地震情報
     if (item.source === "cwa" && item.displayType === "eq") {
       html += `<h3>${item.Title}</h3>`;
@@ -2666,8 +2670,8 @@ fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB
 function getIconSize(magnitude) {
   // マグニチュードに応じてアイコンサイズを計算
   const baseSize = 7;
-  const scaleFactor = 6;
-  const size = baseSize + (magnitude * scaleFactor);
+  const scaleFactor = 2;
+  const size = baseSize + ( Math.pow(magnitude, 2));
   return [size, size];
 }
 
@@ -2715,4 +2719,23 @@ function initMapWithMarkers(map, markers) {
 }
 // 地図を初期化
 const map = initMap();
+
+
+document.addEventListener("DOMContentLoaded", function () {
+  const tabButtons = document.querySelectorAll(".tab-button");
+  const tabPanes = document.querySelectorAll(".tab-pane");
+
+  tabButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      // すべてのタブのアクティブクラスを削除
+      tabButtons.forEach(btn => btn.classList.remove("active"));
+      tabPanes.forEach(pane => pane.classList.remove("active"));
+
+      // クリックされたタブをアクティブに
+      button.classList.add("active");
+      const targetTab = document.getElementById(button.dataset.tab);
+      targetTab.classList.add("active");
+    });
+  });
+});
 
