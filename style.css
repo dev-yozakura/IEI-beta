@@ -81,15 +81,15 @@ h1 {
 .section-title {
   font-size: 1.2em;
   margin-bottom: 15px;
-  color: #2c3e50;
+  color: #ffffff;
   border-bottom: 1px solid #eee;
   padding-bottom: 5px;
   white-space: nowrap;
 }
 
 .earthquake-item {
-  border-bottom: 1px solid #eee;
-  padding: 10px 0;
+  border-bottom: 0px solid #eee;
+  padding: 5px 0;
 }
 
 .earthquake-item:last-child {
@@ -97,7 +97,7 @@ h1 {
 }
 
 .controls {
-  background-color: rgb(232, 233, 255);
+  background-color: rgb(0, 0, 0);
   padding: 15px;
   border-radius: 8px;
   margin-bottom: 30px;
@@ -107,6 +107,7 @@ h1 {
 .controls label {
   font-weight: bold;
   margin-right: 10px;
+  color : #ffffff;
 }
 
 .controls input[type="checkbox"] {
@@ -576,6 +577,7 @@ h1 {
 
 .tab-content {
   padding: 20px;
+  background-color: #000000;
 }
 
 .tab-pane {
@@ -594,7 +596,7 @@ h1 {
 
 body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(90deg, #9193fc 0%, #5c7aff 100%);
+  background: linear-gradient(90deg, #000000 0%, #000000 100%);
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -627,7 +629,7 @@ body {
   padding: 10px 15px;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(232, 232, 232, 0.7);
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
@@ -694,10 +696,10 @@ body {
 
 /* コンテンツカード */
 .content-card {
-  background: rgba(215, 202, 255, 0.95);
+  background: rgba(0, 0, 0, 0.95);
   border-radius: 15px;
   padding: 30px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 30px rgba(193, 193, 193, 0.1);
 }
 
 .content-card h2 {
@@ -707,7 +709,7 @@ body {
 }
 
 .content-card p {
-  color: #666;
+  color: #ffffff;
   margin-bottom: 25px;
   font-size: 1.1em;
   line-height: 1.6;
@@ -723,7 +725,7 @@ body {
 .stat-card {
  
   color: white;
-
+  transition: 0.5s ease;
 }
 .stat-card-0 {
   background: linear-gradient(135deg, #667eea, #667eea);
@@ -796,45 +798,7 @@ body {
   text-align: left;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
-.stat-card.level-1 {
-    background-color: #637171; /* I */
-}
 
-.stat-card.level-2 {
-    background-color: #10669f; /* II */
-}
-
-.stat-card.level-3 {
-    background-color: #0d9447; /* III */
-}
-
-.stat-card.level-4 {
-    background-color: #c49700; /* IV */
-}
-
-.stat-card.level-5 {
-    background-color: #e98226; /* V */
-}
-
-.stat-card.level-6 {
-    background-color: #e31200; /* VI */
-}
-
-.stat-card.level-7 {
-    background-color: #8f0090; /* VII */
-}
-
-.stat-card.level-8 {
-    background-color: #800000; /* VIII (例: 暗い赤) */
-}
-
-.stat-card.level-9 {
-    background-color: #4B0082; /* IX (例: インディゴ) */
-}
-
-.stat-card.level-10 {
-    background-color: #000000; /* X (例: 黒) */
-}
 .stat-card h3 {
   font-size: 2em;
   margin-bottom: 5px;
