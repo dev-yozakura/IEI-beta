@@ -967,16 +967,16 @@ function getIntensityInteger(intensity) {
   if (typeof intensity === "string") {
     // "V" や "VI" のような形式から数値部分を抽出
     const romanToNumber = {
-      "I": 1,
-      "II": 2,
-      "III": 3,
-      "IV": 4,    
-      "V": 5,
-      "VI": 6,
-      "VII": 7,
-      "VIII": 8,
-      "IX": 9,
-      "X": 10
+      I: 1,
+      II: 2,
+      III: 3,
+      IV: 4,
+      V: 5,
+      VI: 6,
+      VII: 7,
+      VIII: 8,
+      IX: 9,
+      X: 10,
     };
     if (intensity in romanToNumber) {
       return romanToNumber[intensity];
@@ -1525,7 +1525,7 @@ function updateCombinedDisplay() {
     let html = "";
     html += `<div class ="stat-card">`;
     html += `<div class ="stat-card-${getMagnitudeInteger(item.magnitude)}">`;
-    
+
     html += `<p>No. ${index + 1}</p>`;
 
     // 中央気象署（台湾）(tiny含む)地震情報
@@ -2822,7 +2822,7 @@ function initMapWithMarkers(map, markers) {
     // ...(markers.jmaEqList || []), // 例: JMAデータも追加する場合
     ...(markers.bmkgData || []),
     ...(markers.bmkg_M5Data || []),
-     ...(Object.values(markers.cencEqList || {})),
+    ...Object.values(markers.cencEqList || {}),
     // ...(Object.values(markers.emscEqList || {})),
   ];
 
