@@ -2648,12 +2648,31 @@ function initMap() {
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap contributors",
   }).addTo(map);
-
+  // 2. プレート境界をGeoJSONで追加
+fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json')
+  .then(res => res.json())
+  .then(data => {
+    L.geoJSON(data, {
+      color: "blue",
+      weight: 2,
+      opacity: 0.8,
+      dashArray: "5,5"
+    }).addTo(map);
+  });
   return map;
+
+}
+
+function getIconSize(magnitude) {
+  // マグニチュードに応じてアイコンサイズを計算
+  const baseSize = 7;
+  const scaleFactor = 6;
+  const size = baseSize + (magnitude * scaleFactor);
+  return [size, size];
 }
 
 function initMapWithMarkers(map, markers) {
-  // 既存のマーカーを削除（FeatureGroupが存在すれば削除）
+  // 既存のマーカーを削除
   if (markerGroup) {
     map.removeLayer(markerGroup);
     markerGroup = null;
@@ -2662,30 +2681,38 @@ function initMapWithMarkers(map, markers) {
   // 新しいFeatureGroupを作成
   markerGroup = L.featureGroup();
 
-  // 各マーカーを追加
-  markers.usgsData.forEach((markerData) => {
-    const marker = L.marker([
-      markerData.lat || markerData.latitude,
-      markerData.lng || markerData.longitude,
-    ]).bindPopup(
+  // マーカー作成関数
+  function createMarker(markerData) {
+    const magnitude = markerData.magnitude || markerData.Magunitude || 1;
+    const iconSize = getIconSize(magnitude);
+    const lat = markerData.lat || markerData.latitude;
+    const lng = markerData.lng || markerData.longitude;
+
+    const customIcon = L.icon({
+      iconUrl: 'https://illust8.com/wp-content/uploads/2018/08/mark_batsu_illust_898.png',
+      iconSize: iconSize,
+      iconAnchor: [iconSize[0]/2, iconSize[1]],
+      popupAnchor: [0, -iconSize[1]]
+    });
+
+    return L.marker([lat, lng], { icon: customIcon }).bindPopup(
       (markerData.time || markerData.OriginTime) +
         "<br>" +
-        (markerData.location ||
-          markerData.HypoCenter ||
-          markerData.Hypocenter) +
+        (markerData.location || markerData.HypoCenter || markerData.Hypocenter) +
         "<br>" +
-        `<p>M${markerData.magnitude || markerData.Magunitude}  深さ: ${
-          markerData.depth || markerData.Depth
-        } km</p>`
+        `<p>M${magnitude}  深さ: ${markerData.depth || markerData.Depth} km</p>`
     );
+  }
 
-    markerGroup.addLayer(marker);
+  // すべてのマーカーデータを処理
+  const allMarkers = [...(markers.cwaEqList_tiny || []), ...(markers.cwaEqList || []),  ...(markers.usgsData || [])];
+  
+  allMarkers.forEach(markerData => {
+    markerGroup.addLayer(createMarker(markerData));
   });
 
-  // マーカーグループを地図に追加
   map.addLayer(markerGroup);
-
-  // 地図の範囲をマーカーに合わせる
 }
 // 地図を初期化
 const map = initMap();
+
