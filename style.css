@@ -728,7 +728,7 @@ body {
   transition: 0.5s ease;
 }
 .stat-card-0 {
-  background: linear-gradient(135deg, #667eea, #667eea);
+  background: linear-gradient(135deg, #a4a8bb, #667eea);
   color: white;
   padding: 20px;
   border-radius: 12px;
