@@ -13,6 +13,17 @@ h1 {
   white-space: nowrap;
 }
 
+h3 {
+  color: #ffffff;
+  margin-bottom: 20px;
+  white-space: nowrap;
+}
+
+p {
+  color: #333;
+  line-height: 0.8;
+  margin-bottom: 20px;
+}
 .section {
   line-height: 0.5em;
   background-color: #fff;
@@ -599,9 +610,10 @@ body {
   background: linear-gradient(90deg, #000000 0%, #000000 100%);
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 0px;
 }
 
 .fancy-tab-container {
@@ -698,8 +710,9 @@ body {
 .content-card {
   background: rgba(0, 0, 0, 0.95);
   border-radius: 15px;
-  padding: 30px;
-  box-shadow: 0 10px 30px rgba(193, 193, 193, 0.1);
+  padding: 10px;
+  box-shadow: 0 10px 30px rgba(255, 255, 255, 0.1);
+  
 }
 
 .content-card h2 {
@@ -904,29 +917,7 @@ input:checked + .slider:before {
   transform: translateX(26px);
 }
 
-/* プロフィールカード */
-.profile-card {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 15px;
-}
 
-.avatar {
-  font-size: 3em;
-}
-
-.profile-info h3 {
-  color: #333;
-  margin-bottom: 5px;
-}
-
-.profile-info p {
-  color: #666;
-  margin-bottom: 15px;
-}
 
 .edit-btn {
   background: linear-gradient(135deg, #667eea, #764ba2);

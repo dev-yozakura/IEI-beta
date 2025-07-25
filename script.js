@@ -1610,7 +1610,7 @@ function updateCombinedDisplay() {
     if (item.source === "usgs" && item.displayType === "eq") {
       html += `<h3>${item.Title}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
-      html += `<p class="time">最終更新: ${item.updateTime}</p>`;
+      //html += `<p class="time">最終更新: ${item.updateTime}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
@@ -2764,8 +2764,8 @@ function initMap() {
     })
     .then((data) => {
       L.geoJSON(data, {
-        color: "blue",
-        weight: 2,
+        color: "orange",
+        weight: 4,
         opacity: 0.8,
         dashArray: "5,5",
       }).addTo(map);
@@ -2819,7 +2819,7 @@ function initMapWithMarkers(map, markers) {
 
     const customIcon = L.icon({
       iconUrl:
-        "https://illust8.com/wp-content/uploads/2018/08/mark_batsu_illust_898.png",
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='30' fill='blue'/%3E%3C/svg%3E",
       iconSize: iconSize,
       iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
       popupAnchor: [0, -iconSize[1]],
