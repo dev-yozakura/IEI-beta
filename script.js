@@ -151,6 +151,8 @@ let iclWs = null;
 let iclData = null;
 let iclLastUpdate = null;
 
+//emsc 地震情報用変数
+let emscLastUpdate = null;
 // ブラウザ通知の許可をリクエスト
 function requestNotificationPermission() {
   if (!("Notification" in window)) {
@@ -389,13 +391,52 @@ function updateCencEqList(data) {
 
 //EMSC 地震情報表示更新
 function updateEmscEqList(data) {
-  if (data && data.type === "Feature") {
-    combinedData.emscEqList[data.id] = data;
-    checkAndNotify(data, "emsc"); // ✅ 通知を送信
-  }
+    // --- ここにデバッグログを追加 ---
+    console.log("★★★ updateEmscEqList 関数が呼び出されました ★★★");
+    console.log("updateEmscEqList に渡された data:", data);
+    console.log("data.type:", data?.type);
+    console.log("data.id:", data?.id);
+    console.log("data.properties:", data?.properties);
+    // --- デバッグログここまで ---
 
-  lastUpdateTimes.emscEq = new Date();
-  updateCombinedDisplay();
+    // combinedData.emscEqList = {}; // ❌ 削除: この行があると履歴が毎回クリアされる
+
+    if (data && data.id && (data.type === "Feature" || data.data.type === "Feature" || (data.properties && data.properties.type === "Feature"))) {
+        const props = data.properties;
+
+        // 統一構造に変換 (ID と source を追加)
+        const convertedData = {
+            id: data.id, // ✅ IDを保持
+            source: "emsc", // ✅ EMSC ソースを明示
+            displayType: "eq", // ✅ 表示タイプを明示
+            // properties から必要な情報を抽出・変換
+            time: props.time, // 発生時刻
+            updateTime: props.lastupdate, // 最終更新時刻
+            location: props.flynn_region || props.region || "情報なし", // 地域
+            magnitude: (props.mag !== undefined && props.mag !== null) ? props.mag.toFixed(1) : "情報なし", // マグニチュード
+            depth: (props.depth !== undefined && props.depth !== null) ? props.depth.toFixed(1) : "情報なし", // 深さ
+            lat: props.lat, // 緯度
+            lng: props.lon, // 経度
+            // 必要に応じて他のプロパティも追加可能
+            Title: props.flynn_region || "EMSC 地震", // 表示用タイトル
+            // intensity: props.intensity || "情報なし", // 必要に応じて
+        };
+
+        // ✅ ID をキーとして格納して履歴を保持
+        combinedData.emscEqList[data.id] = convertedData;
+
+          // 通知
+        //checkAndNotify(convertedData, "emsc"); // ✅ 通知を送信 (convertedData を渡す)
+
+        emscLastUpdate = new Date();
+        updateCombinedDisplay(); // ✅ 統合表示を更新
+        console.log("updateEmscEqList - データを格納しました。", convertedData);
+        return; // 正常に処理されたことを示す
+    }
+    console.log("updateEmscEqList - 条件を満たしませんでした。", data);
+    // else の場合の処理は特に必要ないかもしれませんが、念のため updateCombinedDisplay は呼び出す
+    emscLastUpdate = new Date();
+    updateCombinedDisplay(); // ✅ 統合表示を更新
 }
 
 // USGS 地震情報表示更新
@@ -715,7 +756,9 @@ async function fetchCwaData() {
         const time = new Date(EarthquakeInfo.OriginTime);
         const ReportType = item.ReportType || "情報なし";
 
-        const magnitude = EarthquakeInfo.EarthquakeMagnitude.MagnitudeValue.toFixed(1) || "情報なし";
+        const magnitude =
+          EarthquakeInfo.EarthquakeMagnitude.MagnitudeValue.toFixed(1) ||
+          "情報なし";
         const depth = EarthquakeInfo.FocalDepth;
         const location = EarthquakeInfo.Epicenter.Location;
         const lat =
@@ -1363,15 +1406,18 @@ function updateCombinedDisplay() {
   if (showFJ && combinedData.fjEew) {
     allData.push(combinedData.fjEew);
   }
-  // 中国地震局（CEA）地震情報
+  // 中国地震局（CEA）地震情報 (EEW)
   if (showCea && combinedData.ceaData) {
+    // showCea は既存のチェックボックスに対応
     allData.push(combinedData.ceaData);
   }
 
-  // 成都高新防災減災研究所（ICL）地震情報（公開ソフトウェアでの使用禁止）
-  if (showIcl && iclData) {
-    allData.push(iclData);
+  // 成都高新防災減災研究所（ICL）地震情報（EEW） (公開ソフトウェアでの使用禁止)
+  if (showIcl && combinedData.iclData) {
+    // showIcl は既存のチェックボックスに対応
+    allData.push(combinedData.iclData);
   }
+
   // USGS 地震情報
   if (showUSGS && combinedData.usgsData.length > 0) {
     allData.push(...combinedData.usgsData);
@@ -1425,13 +1471,17 @@ function updateCombinedDisplay() {
       allData.push(item);
     });
   }
-  // EMSC 地震情報
-  if (showEMSC && combinedData.emscEqList) {
+
+// EMSC 地震情報
+if (showEMSC && combinedData.emscEqList) {
     Object.values(combinedData.emscEqList).forEach((item) => {
-      if (item && item.type !== "Feature") return;
-      allData.push(item);
+        // ✅ item が存在し、かつ source が "emsc" のものだけを追加
+        if (item && item.source === "emsc") { // <-- ここを修正
+           allData.push(item);
+        }
     });
-  }
+}
+
   // JMA XMLデータ
   if (showJmaXml && jmaXmlData.length > 0) {
     allData.push(...jmaXmlData);
@@ -1533,13 +1583,11 @@ function updateCombinedDisplay() {
       (item.source === "cwa" || item.source === "cwa_tiny") &&
       item.displayType === "eq"
     ) {
-      
-
       html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
-html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
+      html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
       html += `<p>深さ: ${item.depth} km</p>`;
       //html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）</p>`;
@@ -1554,7 +1602,7 @@ html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
       html += `<p>深さ: ${item.depth} km</p>`;
-     // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
+      // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: USGS</p>`;
     }
     // BMKG地震情報
@@ -1660,7 +1708,7 @@ html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
         html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
       }
       html += `<p class="time">発生時刻: ${item.time_full || item.time}</p>`;
-     // html += `<p class="location">震源地: ${item.location}</p>`;
+      // html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
       // 震度表示
@@ -1742,12 +1790,14 @@ html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
     }
 
     // EMSC 地震情報リスト
-    else if (item.type === "Feature") {
-      html += `<h3>${item.flynn_region}</h3>`;
-      html += `<p class="time">発生時刻: ${item.time}</p>`;
-      html += `<p>マグニチュード: ${item.mag}</p>`;
-      html += "<p>深さ: " + (item.depth || "情報なし") + " km</p>";
-      html += `<p class="source">情報源: EMSC</p>`;
+      else if (item.source === "emsc" && item.displayType === "eq") { // <-- 新しい条件: source と displayType をチェック
+      // updateEmscEqList で変換された統一構造のプロパティを使用
+      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`; // <-- item.Title, item.location
+      html += `<p class="time">発生時刻: ${item.time || "情報なし"}</p>`; // <-- item.time
+      html += `<p>深さ: ${item.depth || "情報なし"} km</p>`; // <-- item.depth
+      // 緯度経度を表示したい場合は以下を追加
+      // html += `<p>緯度: ${item.lat || "情報なし"}, 経度: ${item.lng || "情報なし"}</p>`; // <-- item.lat, item.lng
+      html += `<p class="source">情報源: EMSC</p>`; // <-- item.source を使うことも可能: `情報源: ${item.source.toUpperCase()}`
     }
     // 取消報表示
     if ((item.isCancel || item.Cancel) && item.type !== "jma_xml") {
@@ -1801,7 +1851,6 @@ async function initialJmaXmlFetch() {
 }
 
 // イベントリスナー
-
 
 sourceJMA.addEventListener("change", updateCombinedDisplay);
 sourceSC.addEventListener("change", updateCombinedDisplay);
@@ -1918,20 +1967,9 @@ function updateCeaEewDisplay(data) {
     source: "cea",
   };
 
-  const container = document.createElement("div");
-  container.className = "earthquake-item";
-  container.innerHTML = `
-        <h3>${ceaData.Title}</h3>
-        <p class="time">発生時刻: ${ceaData.shockTime}</p>
-        <p class="location">震源地: ${ceaData.placeName}</p>
-        <p>マグニチュード: ${ceaData.magnitude}</p>
-        <p>最大烈度: ${getIntersityLabel(ceaData.epiIntensity)}</p>
-        <p>深さ: ${ceaData.depth} km</p>
-        <p class="source">情報源: 中国地震局（CEA）</p>
-    `;
-  ceaList.appendChild(container);
+  combinedData.ceaData = ceaData; // combinedData に格納
   ceaLastUpdate = new Date();
-  updateCombinedDisplay(); //
+  updateCombinedDisplay(); // 統合表示を更新
 }
 
 // 成都地震局 地震警報表示更新
@@ -2011,29 +2049,7 @@ function updateCencEqList(data) {
   lastUpdateTimes.cencEq = new Date();
   updateCombinedDisplay();
 }
-// EMSC 地震情報表示更新（統一構造に変換）
-function updateEmscEqList(data) {
-  combinedData.emscEqList = {};
 
-  const eq = data.properties;
-  logEmscDataStructure(eq); // デバッグ用ログを追加
-
-  // 統一構造に変換
-  combinedData.emscEqList = {
-    ...eq,
-    source: "emsc",
-    displayType: "eq",
-    time: eq.time,
-    updateTime: eq.lastupdate,
-    location: eq.flynn_region || eq.location || "情報なし",
-    magnitude: eq.mag || eq.magnitude || "情報なし",
-    depth: eq.Depth || eq.depth || "情報なし",
-    intensity: eq.MaxIntensity || eq.intensity || "情報なし",
-  };
-
-  emscLastUpdate = new Date();
-  updateCombinedDisplay();
-}
 
 function connectBmkg() {
   // BMKGはHTTPで取得するため、WebSocketは不要
@@ -2334,9 +2350,7 @@ function connectCencEqList() {
 // EMSC 地震情報リスト接続関数
 function connectEmscEqList() {
   if (emscEqWs) emscEqWs.close();
-  emscEqWs = new WebSocket(
-    "wss://www.seismicportal.eu/standing_order/websocket"
-  );
+  emscEqWs = new WebSocket("wss://www.seismicportal.eu/standing_order/websocket");
 
   emscEqWs.onopen = () => {
     connections.emscEq = true;
@@ -2346,17 +2360,25 @@ function connectEmscEqList() {
 
   emscEqWs.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data);
-      console.log("EMSCデータ受信:", data); // ログを追加
+      const message = JSON.parse(event.data); // メッセージ全体を message とする
+      console.log("EMSCデータ受信:", message); // ログを追加
 
-      if (data.type === "Feature") {
-        updateEmscEqList(data);
+      // action が "create" または "update" で、message.data が存在し、message.data.type が "Feature" かを確認
+      if (message &&
+          (message.action === "create" || message.action === "update") &&
+          message.data &&
+          message.data.type === "Feature" &&
+          message.data.id) { // ID の確認も追加
+        console.log("EMSC 'create' or 'update' Feature データを検出。updateEmscEqList を呼び出します。");
+        updateEmscEqList(message.data); // ✅ message.data (Feature オブジェクト) を渡す
+      } else {
+        console.log("EMSC データ受信しましたが、処理対象外のデータです。", message);
       }
     } catch (error) {
       console.error("EMSCデータ解析エラー:", error);
     }
 
-    updateCombinedDisplay();
+    updateCombinedDisplay(); // 念のため、毎回統合表示を更新
   };
 
   emscEqWs.onclose = () => {
@@ -2805,7 +2827,7 @@ function initMapWithMarkers(map, markers) {
     ...(markers.bmkgData || []),
     ...(markers.bmkg_M5Data || []),
     ...Object.values(markers.cencEqList || {}),
-    // ...(Object.values(markers.emscEqList || {})),
+     ...(Object.values(markers.emscEqList || {})),
   ];
 
   console.log(`処理対象マーカー数: ${allMarkers.length}`);
@@ -2867,16 +2889,28 @@ document.addEventListener("DOMContentLoaded", function () {
   const applyMapSettingsButton = document.getElementById("applyMapSettings");
 
   // 一括操作ボタンの要素を取得
-  const selectAllButton = document.getElementById('selectAllButton');
-  const deselectAllButton = document.getElementById('deselectAllButton');
+  const selectAllButton = document.getElementById("selectAllButton");
+  const deselectAllButton = document.getElementById("deselectAllButton");
 
   // tab3 内のすべての設定可能なトグルスイッチの input 要素のIDリスト
   // 実際の tab3 内のIDに合わせて更新してください
   const allToggleIdsInTab3 = [
-    'sourceJMA', 'sourceSC', 'sourceFJ', 'sourceCea', 'sourceIcl',
-    'sourceJmaEqList', 'sourceCENC', 'sourceBMKG', 'sourceBMKG_M5',
-    'sourceJmaXml', 'sourceUSGS', 'sourceCWA', 'sourceCWA_tiny',
-    'sourceEMSC', 'enableNotification', 'soundNotification'
+    "sourceJMA",
+    "sourceSC",
+    "sourceFJ",
+    "sourceCea",
+    "sourceIcl",
+    "sourceJmaEqList",
+    "sourceCENC",
+    "sourceBMKG",
+    "sourceBMKG_M5",
+    "sourceJmaXml",
+    "sourceUSGS",
+    "sourceCWA",
+    "sourceCWA_tiny",
+    "sourceEMSC",
+    "enableNotification",
+    "soundNotification",
     // themeToggle は表示設定なので除外します
     // 地図表示設定のトグルも必要に応じて追加できます
     // 'showCwaTinyMarkers', 'showCwaMarkers', ...
@@ -2884,13 +2918,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // 「すべて表示」ボタンのクリックイベント
   if (selectAllButton) {
-    selectAllButton.addEventListener('click', function() {
-      allToggleIdsInTab3.forEach(function(id) {
+    selectAllButton.addEventListener("click", function () {
+      allToggleIdsInTab3.forEach(function (id) {
         const checkbox = document.getElementById(id);
         if (checkbox && !checkbox.checked) {
           checkbox.checked = true;
           // チェック状態の変更を反映するために change イベントを発火させる
-          checkbox.dispatchEvent(new Event('change'));
+          checkbox.dispatchEvent(new Event("change"));
         }
       });
       // 必要に応じて、地図表示設定のトグルもここで操作
@@ -2900,13 +2934,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // 「すべて非表示」ボタンのクリックイベント
   if (deselectAllButton) {
-    deselectAllButton.addEventListener('click', function() {
-      allToggleIdsInTab3.forEach(function(id) {
+    deselectAllButton.addEventListener("click", function () {
+      allToggleIdsInTab3.forEach(function (id) {
         const checkbox = document.getElementById(id);
         if (checkbox && checkbox.checked) {
           checkbox.checked = false;
           // チェック状態の変更を反映するために change イベントを発火させる
-          checkbox.dispatchEvent(new Event('change'));
+          checkbox.dispatchEvent(new Event("change"));
         }
       });
       // 必要に応いて、地図表示設定のトグルもここで操作
