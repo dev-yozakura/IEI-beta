@@ -391,52 +391,64 @@ function updateCencEqList(data) {
 
 //EMSC 地震情報表示更新
 function updateEmscEqList(data) {
-    // --- ここにデバッグログを追加 ---
-    console.log("★★★ updateEmscEqList 関数が呼び出されました ★★★");
-    console.log("updateEmscEqList に渡された data:", data);
-    console.log("data.type:", data?.type);
-    console.log("data.id:", data?.id);
-    console.log("data.properties:", data?.properties);
-    // --- デバッグログここまで ---
+  // --- ここにデバッグログを追加 ---
+  console.log("★★★ updateEmscEqList 関数が呼び出されました ★★★");
+  console.log("updateEmscEqList に渡された data:", data);
+  console.log("data.type:", data?.type);
+  console.log("data.id:", data?.id);
+  console.log("data.properties:", data?.properties);
+  // --- デバッグログここまで ---
 
-    // combinedData.emscEqList = {}; // ❌ 削除: この行があると履歴が毎回クリアされる
+  // combinedData.emscEqList = {}; // ❌ 削除: この行があると履歴が毎回クリアされる
 
-    if (data && data.id && (data.type === "Feature" || data.data.type === "Feature" || (data.properties && data.properties.type === "Feature"))) {
-        const props = data.properties;
+  if (
+    data &&
+    data.id &&
+    (data.type === "Feature" ||
+      data.data.type === "Feature" ||
+      (data.properties && data.properties.type === "Feature"))
+  ) {
+    const props = data.properties;
 
-        // 統一構造に変換 (ID と source を追加)
-        const convertedData = {
-            id: data.id, // ✅ IDを保持
-            source: "emsc", // ✅ EMSC ソースを明示
-            displayType: "eq", // ✅ 表示タイプを明示
-            // properties から必要な情報を抽出・変換
-            time: props.time, // 発生時刻
-            updateTime: props.lastupdate, // 最終更新時刻
-            location: props.flynn_region || props.region || "情報なし", // 地域
-            magnitude: (props.mag !== undefined && props.mag !== null) ? props.mag.toFixed(1) : "情報なし", // マグニチュード
-            depth: (props.depth !== undefined && props.depth !== null) ? props.depth.toFixed(1) : "情報なし", // 深さ
-            lat: props.lat, // 緯度
-            lng: props.lon, // 経度
-            // 必要に応じて他のプロパティも追加可能
-            Title: props.flynn_region || "EMSC 地震", // 表示用タイトル
-            // intensity: props.intensity || "情報なし", // 必要に応じて
-        };
+    // 統一構造に変換 (ID と source を追加)
+    const convertedData = {
+      id: data.id, // ✅ IDを保持
+      source: "emsc", // ✅ EMSC ソースを明示
+      displayType: "eq", // ✅ 表示タイプを明示
+      // properties から必要な情報を抽出・変換
+      time: props.time, // 発生時刻
+      updateTime: props.lastupdate, // 最終更新時刻
+      location: props.flynn_region || props.region || "情報なし", // 地域
+      magnitude:
+        props.mag !== undefined && props.mag !== null
+          ? props.mag.toFixed(1)
+          : "情報なし", // マグニチュード
+      depth:
+        props.depth !== undefined && props.depth !== null
+          ? props.depth.toFixed(1)
+          : "情報なし", // 深さ
+      lat: props.lat, // 緯度
+      lng: props.lon, // 経度
+      // 必要に応じて他のプロパティも追加可能
+      Title: props.flynn_region || "EMSC 地震", // 表示用タイトル
+      // intensity: props.intensity || "情報なし", // 必要に応じて
+    };
 
-        // ✅ ID をキーとして格納して履歴を保持
-        combinedData.emscEqList[data.id] = convertedData;
+    // ✅ ID をキーとして格納して履歴を保持
+    combinedData.emscEqList[data.id] = convertedData;
 
-          // 通知
-        //checkAndNotify(convertedData, "emsc"); // ✅ 通知を送信 (convertedData を渡す)
+    // 通知
+    //checkAndNotify(convertedData, "emsc"); // ✅ 通知を送信 (convertedData を渡す)
 
-        emscLastUpdate = new Date();
-        updateCombinedDisplay(); // ✅ 統合表示を更新
-        console.log("updateEmscEqList - データを格納しました。", convertedData);
-        return; // 正常に処理されたことを示す
-    }
-    console.log("updateEmscEqList - 条件を満たしませんでした。", data);
-    // else の場合の処理は特に必要ないかもしれませんが、念のため updateCombinedDisplay は呼び出す
     emscLastUpdate = new Date();
     updateCombinedDisplay(); // ✅ 統合表示を更新
+    console.log("updateEmscEqList - データを格納しました。", convertedData);
+    return; // 正常に処理されたことを示す
+  }
+  console.log("updateEmscEqList - 条件を満たしませんでした。", data);
+  // else の場合の処理は特に必要ないかもしれませんが、念のため updateCombinedDisplay は呼び出す
+  emscLastUpdate = new Date();
+  updateCombinedDisplay(); // ✅ 統合表示を更新
 }
 
 // USGS 地震情報表示更新
@@ -1472,15 +1484,16 @@ function updateCombinedDisplay() {
     });
   }
 
-// EMSC 地震情報
-if (showEMSC && combinedData.emscEqList) {
+  // EMSC 地震情報
+  if (showEMSC && combinedData.emscEqList) {
     Object.values(combinedData.emscEqList).forEach((item) => {
-        // ✅ item が存在し、かつ source が "emsc" のものだけを追加
-        if (item && item.source === "emsc") { // <-- ここを修正
-           allData.push(item);
-        }
+      // ✅ item が存在し、かつ source が "emsc" のものだけを追加
+      if (item && item.source === "emsc") {
+        // <-- ここを修正
+        allData.push(item);
+      }
     });
-}
+  }
 
   // JMA XMLデータ
   if (showJmaXml && jmaXmlData.length > 0) {
@@ -1790,7 +1803,8 @@ if (showEMSC && combinedData.emscEqList) {
     }
 
     // EMSC 地震情報リスト
-      else if (item.source === "emsc" && item.displayType === "eq") { // <-- 新しい条件: source と displayType をチェック
+    else if (item.source === "emsc" && item.displayType === "eq") {
+      // <-- 新しい条件: source と displayType をチェック
       // updateEmscEqList で変換された統一構造のプロパティを使用
       html += `<h3>M ${item.magnitude} - ${item.location}</h3>`; // <-- item.Title, item.location
       html += `<p class="time">発生時刻: ${item.time || "情報なし"}</p>`; // <-- item.time
@@ -2049,7 +2063,6 @@ function updateCencEqList(data) {
   lastUpdateTimes.cencEq = new Date();
   updateCombinedDisplay();
 }
-
 
 function connectBmkg() {
   // BMKGはHTTPで取得するため、WebSocketは不要
@@ -2350,7 +2363,9 @@ function connectCencEqList() {
 // EMSC 地震情報リスト接続関数
 function connectEmscEqList() {
   if (emscEqWs) emscEqWs.close();
-  emscEqWs = new WebSocket("wss://www.seismicportal.eu/standing_order/websocket");
+  emscEqWs = new WebSocket(
+    "wss://www.seismicportal.eu/standing_order/websocket"
+  );
 
   emscEqWs.onopen = () => {
     connections.emscEq = true;
@@ -2364,15 +2379,23 @@ function connectEmscEqList() {
       console.log("EMSCデータ受信:", message); // ログを追加
 
       // action が "create" または "update" で、message.data が存在し、message.data.type が "Feature" かを確認
-      if (message &&
-          (message.action === "create" || message.action === "update") &&
-          message.data &&
-          message.data.type === "Feature" &&
-          message.data.id) { // ID の確認も追加
-        console.log("EMSC 'create' or 'update' Feature データを検出。updateEmscEqList を呼び出します。");
+      if (
+        message &&
+        (message.action === "create" || message.action === "update") &&
+        message.data &&
+        message.data.type === "Feature" &&
+        message.data.id
+      ) {
+        // ID の確認も追加
+        console.log(
+          "EMSC 'create' or 'update' Feature データを検出。updateEmscEqList を呼び出します。"
+        );
         updateEmscEqList(message.data); // ✅ message.data (Feature オブジェクト) を渡す
       } else {
-        console.log("EMSC データ受信しましたが、処理対象外のデータです。", message);
+        console.log(
+          "EMSC データ受信しましたが、処理対象外のデータです。",
+          message
+        );
       }
     } catch (error) {
       console.error("EMSCデータ解析エラー:", error);
@@ -2721,7 +2744,7 @@ function initMap() {
   }
 
   console.log("地図を初期化中...");
-  map = L.map("map").setView([35.6895, 0], 1); // 初期座標（東京）
+  map = L.map("map").setView([35.6895, 135], 5); // 初期座標（東京）
 
   // タイルレイヤーを追加
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -2798,7 +2821,7 @@ function initMapWithMarkers(map, markers) {
       iconUrl:
         "https://illust8.com/wp-content/uploads/2018/08/mark_batsu_illust_898.png",
       iconSize: iconSize,
-      iconAnchor: [iconSize[0] / 2, iconSize[1]],
+      iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
       popupAnchor: [0, -iconSize[1]],
     });
 
@@ -2827,7 +2850,7 @@ function initMapWithMarkers(map, markers) {
     ...(markers.bmkgData || []),
     ...(markers.bmkg_M5Data || []),
     ...Object.values(markers.cencEqList || {}),
-     ...(Object.values(markers.emscEqList || {})),
+    ...Object.values(markers.emscEqList || {}),
   ];
 
   console.log(`処理対象マーカー数: ${allMarkers.length}`);
