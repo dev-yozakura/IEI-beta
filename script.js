@@ -1802,25 +1802,7 @@ async function initialJmaXmlFetch() {
 
 // イベントリスナー
 
-// 「すべて表示」ボタン
-document.getElementById("selectAllButton").addEventListener("click", () => {
-  document
-    .querySelectorAll(".controls input[type='checkbox']")
-    .forEach((checkbox) => {
-      checkbox.checked = true;
-    });
-  updateCombinedDisplay();
-});
 
-// 「すべて非表示」ボタン
-document.getElementById("deselectAllButton").addEventListener("click", () => {
-  document
-    .querySelectorAll(".controls input[type='checkbox']")
-    .forEach((checkbox) => {
-      checkbox.checked = false;
-    });
-  updateCombinedDisplay();
-});
 sourceJMA.addEventListener("change", updateCombinedDisplay);
 sourceSC.addEventListener("change", updateCombinedDisplay);
 sourceFJ.addEventListener("change", updateCombinedDisplay);
@@ -2883,6 +2865,56 @@ document.addEventListener("DOMContentLoaded", function () {
   const showCencMarkersInput = document.getElementById("showCencMarkers"); // 例
   const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
   const applyMapSettingsButton = document.getElementById("applyMapSettings");
+
+  // 一括操作ボタンの要素を取得
+  const selectAllButton = document.getElementById('selectAllButton');
+  const deselectAllButton = document.getElementById('deselectAllButton');
+
+  // tab3 内のすべての設定可能なトグルスイッチの input 要素のIDリスト
+  // 実際の tab3 内のIDに合わせて更新してください
+  const allToggleIdsInTab3 = [
+    'sourceJMA', 'sourceSC', 'sourceFJ', 'sourceCea', 'sourceIcl',
+    'sourceJmaEqList', 'sourceCENC', 'sourceBMKG', 'sourceBMKG_M5',
+    'sourceJmaXml', 'sourceUSGS', 'sourceCWA', 'sourceCWA_tiny',
+    'sourceEMSC', 'enableNotification', 'soundNotification'
+    // themeToggle は表示設定なので除外します
+    // 地図表示設定のトグルも必要に応じて追加できます
+    // 'showCwaTinyMarkers', 'showCwaMarkers', ...
+  ];
+
+  // 「すべて表示」ボタンのクリックイベント
+  if (selectAllButton) {
+    selectAllButton.addEventListener('click', function() {
+      allToggleIdsInTab3.forEach(function(id) {
+        const checkbox = document.getElementById(id);
+        if (checkbox && !checkbox.checked) {
+          checkbox.checked = true;
+          // チェック状態の変更を反映するために change イベントを発火させる
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+      // 必要に応じて、地図表示設定のトグルもここで操作
+      // applyMapSettingsIfNecessary(); // 例えば、地図設定もまとめて適用する関数を呼び出す
+    });
+  }
+
+  // 「すべて非表示」ボタンのクリックイベント
+  if (deselectAllButton) {
+    deselectAllButton.addEventListener('click', function() {
+      allToggleIdsInTab3.forEach(function(id) {
+        const checkbox = document.getElementById(id);
+        if (checkbox && checkbox.checked) {
+          checkbox.checked = false;
+          // チェック状態の変更を反映するために change イベントを発火させる
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+      // 必要に応いて、地図表示設定のトグルもここで操作
+      // applyMapSettingsIfNecessary();
+    });
+  }
+
+  // ... 他のコード ...
 
   if (tabButtons.length > 0 && tabContents.length > 0) {
     // 初期インジケーター位置設定
