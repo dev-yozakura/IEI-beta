@@ -1,3 +1,5 @@
+let HypoDate = 0;
+
 // 統合表示用変数
 let combinedData = {
   jmaEew: null,
@@ -2541,7 +2543,7 @@ function startAutoFetch() {
     }
 
     //jmaHypoData
-    fetchJmaHypoData(0); // JMA Hypoデータを定期取得
+    fetchJmaHypoData(HypoDate); // JMA Hypoデータを定期取得
     // USGSデータ
     fetchUsgsData(); // ✅ USGSデータを定期取得
     // CWA 地震情報
@@ -2790,7 +2792,7 @@ fetchUsgsData();
 initNotifications();
 fetchCwaData(); // CWA 地震情報
 fetchCwaTinyData(); // CWA Tiny 地震情報
-fetchJmaHypoData(0); // JMA Hypoデータを初期取得
+fetchJmaHypoData(HypoDate); // JMA Hypoデータを初期取得
 startAutoFetch(); // 自動取得開始
 
 // 初回XMLデータ取得
@@ -2850,6 +2852,15 @@ function getIconSize(magnitude) {
   return [size, size];
 }
 
+function getDepthColor(depth) {
+  if (depth === undefined || depth === null || isNaN(depth)) return "black"; // デフォルト（黒色）
+
+  if (depth < 30) return "red";      // 赤（浅い）
+  else if (depth < 50) return "orange"; // オレンジ
+  else if (depth < 100) return "green"; // 緑
+  else if (depth < 200) return "lime"; // ライム
+  else return "blue";                  // 青（深い）
+}
 function initMapWithMarkers(map, markers) {
   if (!map) {
     console.warn("initMapWithMarkers: 地図が初期化されていません");
@@ -2872,17 +2883,17 @@ function initMapWithMarkers(map, markers) {
     const iconSize = getIconSize(magnitude);
     const lat = markerData.lat || markerData.latitude;
     const lng = markerData.lng || markerData.longitude;
-
+const depth = markerData.depth || markerData.Depth;
     // 緯度経度が無効な場合はマーカーを作成しない
     if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
       console.warn("無効な緯度経度のためマーカーを作成しません:", markerData);
       return null;
     }
 
+    const color = getDepthColor(depth);
     const customIcon = L.icon({
-      iconUrl:
-        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='30' fill='blue'/%3E%3C/svg%3E",
-      iconSize: iconSize,
+          iconUrl: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='50' fill='${color}' stroke='black' stroke-width='4'/%3E%3C/svg%3E`,
+ iconSize: iconSize,
       iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
       popupAnchor: [0, -iconSize[1]],
     });
@@ -2958,6 +2969,7 @@ window.addEventListener("load", function () {
     console.error("loadイベントでの地図初期化中にエラーが発生しました:", error);
   }
 });
+
 
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOMContentLoadedイベント発火");
