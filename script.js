@@ -1965,6 +1965,11 @@ sourceCWA_tiny.addEventListener("change", () => {
   updateCombinedDisplay(); // ✅ 統合表示更新
 });
 
+//jmahypoData
+sourceJmaHypo.addEventListener("change", () => {
+  if (sourceJmaHypo.checked) fetchJmaHypoData(HypoDate); // JMA Hypoデータを再取得
+  updateCombinedDisplay(); // 統合表示更新
+});
 // 自動取得間隔の変更イベント
 intervalInput.addEventListener("change", () => {
   if (autoFetchInterval) {
@@ -2892,7 +2897,7 @@ const depth = markerData.depth || markerData.Depth;
 
     const color = getDepthColor(depth);
     const customIcon = L.icon({
-          iconUrl: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='50' fill='${color}' stroke='black' stroke-width='4'/%3E%3C/svg%3E`,
+          iconUrl: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='50' fill='${color}' stroke='black' stroke-width='2'/%3E%3C/svg%3E`,
  iconSize: iconSize,
       iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
       popupAnchor: [0, -iconSize[1]],
@@ -2982,6 +2987,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const showBmkgMarkersInput = document.getElementById("showBmkgMarkers");
   const showBmkgM5MarkersInput = document.getElementById("showBmkgM5Markers");
   const showJmaMarkersInput = document.getElementById("showJmaMarkers"); // 例
+  
   const showCencMarkersInput = document.getElementById("showCencMarkers"); // 例
   const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
   const applyMapSettingsButton = document.getElementById("applyMapSettings");
@@ -3003,6 +3009,7 @@ document.addEventListener("DOMContentLoaded", function () {
     "sourceBMKG",
     "sourceBMKG_M5",
     "sourceJmaXml",
+    "sourceJmaHypo",
     "sourceUSGS",
     "sourceCWA",
     "sourceCWA_tiny",
