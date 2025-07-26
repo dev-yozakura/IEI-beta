@@ -4,6 +4,7 @@ let combinedData = {
   scEew: null,
   fjEew: null,
   jmaEqList: [],
+  jmaHypoData: [],
   cencEqList: {},
   emscEqList: {},
   cwaEqList: [],
@@ -50,6 +51,7 @@ let lastUpdateTimes = {
   emscEq: null,
   cwaEq: null,
   cwaEq_tiny: null,
+  jmaGeojson: null,
 };
 
 // DOM要素取得
@@ -66,6 +68,8 @@ const sourceUSGS = document.getElementById("sourceUSGS");
 const sourceEMSC = document.getElementById("sourceEMSC");
 const sourceCWA = document.getElementById("sourceCWA");
 const sourceCWA_tiny = document.getElementById("sourceCWA_tiny");
+const sourceJmaEqList = document.getElementById("sourceJmaEqList");
+const sourceJmaHypo = document.getElementById("sourceJmaHypo");
 
 const intervalInput = document.getElementById("intervalInput");
 const startButton = document.getElementById("startButton");
@@ -122,6 +126,8 @@ let bmkg_M5LastUpdate = null;
 // USGS 地震情報用変数
 
 let usgsLastUpdate = null;
+//JmaHypoData 用変数
+let jmaHypoLastUpdate = null;
 // 中央気象署（台湾）用変数
 const CWA_API_KEY = "CWA-1D4B4F6B-A52D-4CC0-9478-5C9AE9D7270A"; // CWA APIキー
 
@@ -449,6 +455,36 @@ function updateEmscEqList(data) {
   // else の場合の処理は特に必要ないかもしれませんが、念のため updateCombinedDisplay は呼び出す
   emscLastUpdate = new Date();
   updateCombinedDisplay(); // ✅ 統合表示を更新
+}
+
+//JMA Hypo 地震情報表示更新
+function updateJmaHypoList(data) {
+  if (data && data.features && Array.isArray(data.features)) {
+          return data.features
+            .map(feature => {
+               const props = feature.properties;
+               const coords = feature.geometry.coordinates;
+               return {
+                 // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
+                 id: props.eid, // ✅ IDを追加
+                 source: "jma_geojson", // ✅ ソースを明示
+                 displayType: "eq", // ✅ 表示タイプを明示
+                 time: props.origin_time, // 発生時刻
+                 // time_full: props.origin_time, // 必要に応じて追加
+                 location: props.name || '不明',
+                 magnitude: props.magnitude !== undefined && props.magnitude !== null ? props.magnitude : '不明',
+                 depth: coords[2] !== null ? (coords[2] / 1000).toFixed(1) : '不明', // kmに変換
+                 lat: coords[1],
+                 lng: coords[0],
+                 intensity: props.intensity || 'なし', // 最大震度 (あれば)
+                 // 必要に応じて他のプロパティも追加
+                 // title: props.ttl || `M${props.magnitude} 地震`, // タイトル
+                 // json: props.json, // 詳細JSONパス
+                 // ... propsの他のフィールド
+               };
+            });
+        }
+        return [];
 }
 
 // USGS 地震情報表示更新
@@ -1387,6 +1423,7 @@ function updateCombinedDisplay() {
   const showJmaXml = sourceJmaXml.checked;
   const showBMKG = sourceBMKG.checked; // 新しいフィルタ
   const showJmaEqList = sourceJmaEqList.checked; // 新しいフィルタ
+  const showJmaHypoList = sourceJmaHypo.checked; // 新しいフィルタ
   const showBMKG_M5 = sourceBMKG_M5.checked; // M5.0+ 用フィルタ
   const showCea = sourceCea.checked; // 中国地震局用フィルタ
   const showIcl = sourceIcl.checked; // 成都地震局用フィルタ
@@ -1513,7 +1550,16 @@ function updateCombinedDisplay() {
       allData.push(item);
     });
   }
-
+// 気象庁 GeoJSON 地震情報 (Hypo) の追加
+if (showJmaHypoList && combinedData.jmaHypoData) {
+  combinedData.jmaHypoData.forEach((item) => {
+    // 必要に応じてフィルタリングや変換をここで行う
+    // 例: 特定のマグニチュード以上のみ表示 etc.
+    // if (item.magnitude >= 3.0) { // 例: M3.0以上のみ
+       allData.push(item);
+    // }
+  });
+}
   // ソート処理
   allData.sort((a, b) => {
     let valueA = null;
@@ -1813,6 +1859,16 @@ function updateCombinedDisplay() {
       // html += `<p>緯度: ${item.lat || "情報なし"}, 経度: ${item.lng || "情報なし"}</p>`; // <-- item.lat, item.lng
       html += `<p class="source">情報源: EMSC</p>`; // <-- item.source を使うことも可能: `情報源: ${item.source.toUpperCase()}`
     }
+
+    //jmaHypoData
+    else if (item.source === "jma_geojson") {
+      // html += `<h3>${item.Title}</h3>`;
+      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
+      html += `<p class="time">発生時刻: ${item.time}</p>`;
+      html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p class="source">情報源: 気象庁 GeoJSON</p>`;
+      //html += `<p>緯度: ${item.lat || "情報なし"}, 経度: ${item.lng || "情報なし"}</p>`;
+    }
     // 取消報表示
     if ((item.isCancel || item.Cancel) && item.type !== "jma_xml") {
       html = `<p class="source">【取消報】</p>${html}`;
@@ -1875,6 +1931,7 @@ sourceJmaXml.addEventListener("change", updateCombinedDisplay);
 sourceBMKG.addEventListener("change", updateCombinedDisplay);
 sourceJmaEqList.addEventListener("change", updateCombinedDisplay); // 新しいイベントリスナー
 sourceBMKG_M5.addEventListener("change", fetchBmkg_M5Data); // 新しいイベントリスナー
+sourceJmaHypo.addEventListener("change", updateCombinedDisplay); // JMA Hypoチェックボックスのイベントリスナー
 // イベントリスナー（正しく変数名を使用）
 
 sourceCea.addEventListener("change", () => {
@@ -2482,6 +2539,9 @@ function startAutoFetch() {
     if (connections.iclEew && iclEewWs?.readyState === WebSocket.OPEN) {
       iclEewWs.send("query_icleew");
     }
+
+    //jmaHypoData
+    fetchJmaHypoData(0); // JMA Hypoデータを定期取得
     // USGSデータ
     fetchUsgsData(); // ✅ USGSデータを定期取得
     // CWA 地震情報
@@ -2730,6 +2790,8 @@ fetchUsgsData();
 initNotifications();
 fetchCwaData(); // CWA 地震情報
 fetchCwaTinyData(); // CWA Tiny 地震情報
+fetchJmaHypoData(0); // JMA Hypoデータを初期取得
+startAutoFetch(); // 自動取得開始
 
 // 初回XMLデータ取得
 initialJmaXmlFetch();
@@ -2851,6 +2913,7 @@ function initMapWithMarkers(map, markers) {
     ...(markers.bmkg_M5Data || []),
     ...Object.values(markers.cencEqList || {}),
     ...Object.values(markers.emscEqList || {}),
+    ...(markers.jmaHypoData || []),
   ];
 
   console.log(`処理対象マーカー数: ${allMarkers.length}`);
@@ -3121,3 +3184,97 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // ... 既存の他の DOMContentLoaded 内の処理 ...
 });
+
+/**
+ * 指定した日数分の気象庁震源データGeoJSON URLを生成します。
+ * @param {number} daysBack 取得する日数（例: 0=今日, 1=昨日まで, 7=1週間前まで）
+ * @returns {Array<string>} GeoJSONファイルのURLの配列
+ */
+function generateHypoUrls(daysBack = 7) {
+  const urls = [];
+  const today = new Date();
+
+  for (let i = 0; i <= daysBack; i++) {
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() - i);
+
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const day = String(targetDate.getDate()).padStart(2, '0');
+
+    const filename = `hypo${year}${month}${day}.geojson`;
+    const url = `https://www.jma.go.jp/bosai/hypo/data/${year}/${month}/${filename}`;
+    urls.push(url);
+  }
+
+  return urls;
+}
+
+/**
+ * 複数のGeoJSON URLから震源データを取得し、統合して combinedData に格納します。
+ * @param {number} daysBack 取得する日数（例: 0=今日, 1=昨日まで, 7=1週間前まで）
+ */
+async function fetchJmaHypoData(daysBack = 7) {
+  const urls = generateHypoUrls(daysBack);
+  console.log("取得する気象庁GeoJSON URLリスト:", urls);
+
+  const fetchPromises = urls.map(url =>
+    fetch(url)
+      .then(response => {
+        if (!response.ok) {
+          console.warn(`気象庁GeoJSONデータ取得エラー (URL: ${url}, Status: ${response.status})`);
+          return [];
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data && data.features && Array.isArray(data.features)) {
+          return data.features
+        
+            .map(feature => {
+               const props = feature.properties;
+               const coords = feature.geometry.coordinates;
+               return {
+                 // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
+                 id: props.eid, // ✅ IDを追加
+                 source: "jma_geojson", // ✅ ソースを明示
+                 displayType: "eq", // ✅ 表示タイプを明示
+                 time: props.date, // 発生時刻
+                 // time_full: props.origin_time, // 必要に応じて追加
+                 location: props.place || '不明',
+                 magnitude: props.mag,
+                 depth: props.dep, // kmに変換
+                 lat: coords[1],
+                 lng: coords[0],
+                 intensity: props.intensity || 'なし', // 最大震度 (あれば)
+                 // 必要に応じて他のプロパティも追加
+                 // title: props.ttl || `M${props.magnitude} 地震`, // タイトル
+                 // json: props.json, // 詳細JSONパス
+                 // ... propsの他のフィールド
+               };
+            });
+        }
+        return [];
+      })
+      .catch(error => {
+         console.error(`気象庁GeoJSONデータ取得中に例外が発生しました (URL: ${url}):`, error);
+         return [];
+      })
+  );
+
+  try {
+    const results = await Promise.all(fetchPromises);
+    const allEarthquakeData = results.flat();
+
+   combinedData.jmaHypoData = allEarthquakeData;
+   lastUpdateTimes.jmaHypo = new Date(); // 最終更新日時を記録
+    console.log(`気象庁GeoJSONデータを取得・更新しました。総数: ${allEarthquakeData.length}`);
+
+    // 統合表示を更新
+    updateCombinedDisplay();
+
+  } catch (error) {
+    console.error('気象庁GeoJSONデータの取得または統合中にエラーが発生しました:', error);
+  }
+}
+
