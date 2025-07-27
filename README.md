@@ -1,4 +1,4 @@
-# IEI-beta
+# MEM-beta
 1. Overview
 Name: Multi-Source Earthquake Monitor (MEM)
 Purpose: To fetch real-time or periodic earthquake data from various international seismic agencies, unify the formats, and present them in an integrated list, on a map, and in 3D visualizations, allowing users to comprehensively grasp global seismic activity.
