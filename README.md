@@ -10,7 +10,6 @@ Japan Meteorological Agency Early Warning (JMA EEW)
 Sichuan Earthquake Administration (SC EEW)
 Fujian Earthquake Administration (FJ EEW)
 China Earthquake Administration (CEA EEW)
-Chengdu Hi-tech Disaster Reduction Institute (ICL EEW)
 China Earthquake Networks Center (CENC)
 EMSC (Euro-Med)
 HTTP Fetching:
