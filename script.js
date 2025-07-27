@@ -462,31 +462,33 @@ function updateEmscEqList(data) {
 //JMA Hypo 地震情報表示更新
 function updateJmaHypoList(data) {
   if (data && data.features && Array.isArray(data.features)) {
-          return data.features
-            .map(feature => {
-               const props = feature.properties;
-               const coords = feature.geometry.coordinates;
-               return {
-                 // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
-                 id: props.eid, // ✅ IDを追加
-                 source: "jma_geojson", // ✅ ソースを明示
-                 displayType: "eq", // ✅ 表示タイプを明示
-                 time: props.origin_time, // 発生時刻
-                 // time_full: props.origin_time, // 必要に応じて追加
-                 location: props.name || '不明',
-                 magnitude: props.magnitude !== undefined && props.magnitude !== null ? props.magnitude : '不明',
-                 depth: coords[2] !== null ? (coords[2] / 1000).toFixed(1) : '不明', // kmに変換
-                 lat: coords[1],
-                 lng: coords[0],
-                 intensity: props.intensity || 'なし', // 最大震度 (あれば)
-                 // 必要に応じて他のプロパティも追加
-                 // title: props.ttl || `M${props.magnitude} 地震`, // タイトル
-                 // json: props.json, // 詳細JSONパス
-                 // ... propsの他のフィールド
-               };
-            });
-        }
-        return [];
+    return data.features.map((feature) => {
+      const props = feature.properties;
+      const coords = feature.geometry.coordinates;
+      return {
+        // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
+        id: props.eid, // ✅ IDを追加
+        source: "jma_geojson", // ✅ ソースを明示
+        displayType: "eq", // ✅ 表示タイプを明示
+        time: props.origin_time, // 発生時刻
+        // time_full: props.origin_time, // 必要に応じて追加
+        location: props.name || "不明",
+        magnitude:
+          props.magnitude !== undefined && props.magnitude !== null
+            ? props.magnitude
+            : "不明",
+        depth: coords[2] !== null ? (coords[2] / 1000).toFixed(1) : "不明", // kmに変換
+        lat: coords[1],
+        lng: coords[0],
+        intensity: props.intensity || "なし", // 最大震度 (あれば)
+        // 必要に応じて他のプロパティも追加
+        // title: props.ttl || `M${props.magnitude} 地震`, // タイトル
+        // json: props.json, // 詳細JSONパス
+        // ... propsの他のフィールド
+      };
+    });
+  }
+  return [];
 }
 
 // USGS 地震情報表示更新
@@ -1552,16 +1554,16 @@ function updateCombinedDisplay() {
       allData.push(item);
     });
   }
-// 気象庁 GeoJSON 地震情報 (Hypo) の追加
-if (showJmaHypoList && combinedData.jmaHypoData) {
-  combinedData.jmaHypoData.forEach((item) => {
-    // 必要に応じてフィルタリングや変換をここで行う
-    // 例: 特定のマグニチュード以上のみ表示 etc.
-    // if (item.magnitude >= 3.0) { // 例: M3.0以上のみ
-       allData.push(item);
-    // }
-  });
-}
+  // 気象庁 GeoJSON 地震情報 (Hypo) の追加
+  if (showJmaHypoList && combinedData.jmaHypoData) {
+    combinedData.jmaHypoData.forEach((item) => {
+      // 必要に応じてフィルタリングや変換をここで行う
+      // 例: 特定のマグニチュード以上のみ表示 etc.
+      // if (item.magnitude >= 3.0) { // 例: M3.0以上のみ
+      allData.push(item);
+      // }
+    });
+  }
   // ソート処理
   allData.sort((a, b) => {
     let valueA = null;
@@ -2860,11 +2862,13 @@ function getIconSize(magnitude) {
 function getDepthColor(depth) {
   if (depth === undefined || depth === null || isNaN(depth)) return "black"; // デフォルト（黒色）
 
-  if (depth < 30) return "red";      // 赤（浅い）
-  else if (depth < 50) return "orange"; // オレンジ
-  else if (depth < 100) return "green"; // 緑
-  else if (depth < 200) return "lime"; // ライム
-  else return "blue";                  // 青（深い）
+  if (depth < 10) return "red"; // 赤（浅い）
+  else if (depth < 30) return "orange"; // オレンジ
+  else if (depth < 50) return "yellow"; // 黄色 
+  else if (depth < 80) return "green"; // 緑
+  else if (depth < 100) return "cyan"; // シアン
+  else if (depth < 200) return "blue"; // 青
+  else return "purple"; // 紫
 }
 function initMapWithMarkers(map, markers) {
   if (!map) {
@@ -2888,7 +2892,7 @@ function initMapWithMarkers(map, markers) {
     const iconSize = getIconSize(magnitude);
     const lat = markerData.lat || markerData.latitude;
     const lng = markerData.lng || markerData.longitude;
-const depth = markerData.depth || markerData.Depth;
+    const depth = markerData.depth || markerData.Depth;
     // 緯度経度が無効な場合はマーカーを作成しない
     if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
       console.warn("無効な緯度経度のためマーカーを作成しません:", markerData);
@@ -2897,8 +2901,8 @@ const depth = markerData.depth || markerData.Depth;
 
     const color = getDepthColor(depth);
     const customIcon = L.icon({
-          iconUrl: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='50' fill='${color}' stroke='black' stroke-width='2'/%3E%3C/svg%3E`,
- iconSize: iconSize,
+      iconUrl: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='50' fill='${color}' stroke='black' stroke-width='2'/%3E%3C/svg%3E`,
+      iconSize: iconSize,
       iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
       popupAnchor: [0, -iconSize[1]],
     });
@@ -2975,7 +2979,6 @@ window.addEventListener("load", function () {
   }
 });
 
-
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOMContentLoadedイベント発火");
   const tabButtons = document.querySelectorAll(".tab-btn");
@@ -2987,7 +2990,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const showBmkgMarkersInput = document.getElementById("showBmkgMarkers");
   const showBmkgM5MarkersInput = document.getElementById("showBmkgM5Markers");
   const showJmaMarkersInput = document.getElementById("showJmaMarkers"); // 例
-  
+
   const showCencMarkersInput = document.getElementById("showCencMarkers"); // 例
   const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
   const applyMapSettingsButton = document.getElementById("applyMapSettings");
@@ -3218,8 +3221,8 @@ function generateHypoUrls(daysBack = 7) {
     targetDate.setDate(today.getDate() - i);
 
     const year = targetDate.getFullYear();
-    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
-    const day = String(targetDate.getDate()).padStart(2, '0');
+    const month = String(targetDate.getMonth() + 1).padStart(2, "0");
+    const day = String(targetDate.getDate()).padStart(2, "0");
 
     const filename = `hypo${year}${month}${day}.geojson`;
     const url = `https://www.jma.go.jp/bosai/hypo/data/${year}/${month}/${filename}`;
@@ -3237,47 +3240,50 @@ async function fetchJmaHypoData(daysBack = 7) {
   const urls = generateHypoUrls(daysBack);
   console.log("取得する気象庁GeoJSON URLリスト:", urls);
 
-  const fetchPromises = urls.map(url =>
+  const fetchPromises = urls.map((url) =>
     fetch(url)
-      .then(response => {
+      .then((response) => {
         if (!response.ok) {
-          console.warn(`気象庁GeoJSONデータ取得エラー (URL: ${url}, Status: ${response.status})`);
+          console.warn(
+            `気象庁GeoJSONデータ取得エラー (URL: ${url}, Status: ${response.status})`
+          );
           return [];
         }
         return response.json();
       })
-      .then(data => {
+      .then((data) => {
         if (data && data.features && Array.isArray(data.features)) {
-          return data.features
-        
-            .map(feature => {
-               const props = feature.properties;
-               const coords = feature.geometry.coordinates;
-               return {
-                 // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
-                 id: props.eid, // ✅ IDを追加
-                 source: "jma_geojson", // ✅ ソースを明示
-                 displayType: "eq", // ✅ 表示タイプを明示
-                 time: props.date, // 発生時刻
-                 // time_full: props.origin_time, // 必要に応じて追加
-                 location: props.place || '不明',
-                 magnitude: props.mag,
-                 depth: props.dep, // kmに変換
-                 lat: coords[1],
-                 lng: coords[0],
-                 intensity: props.intensity || 'なし', // 最大震度 (あれば)
-                 // 必要に応じて他のプロパティも追加
-                 // title: props.ttl || `M${props.magnitude} 地震`, // タイトル
-                 // json: props.json, // 詳細JSONパス
-                 // ... propsの他のフィールド
-               };
-            });
+          return data.features.map((feature) => {
+            const props = feature.properties;
+            const coords = feature.geometry.coordinates;
+            return {
+              // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
+              id: props.eid, // ✅ IDを追加
+              source: "jma_geojson", // ✅ ソースを明示
+              displayType: "eq", // ✅ 表示タイプを明示
+              time: props.date, // 発生時刻
+              // time_full: props.origin_time, // 必要に応じて追加
+              location: props.place || "不明",
+              magnitude: props.mag,
+              depth: props.dep, // kmに変換
+              lat: coords[1],
+              lng: coords[0],
+              intensity: props.intensity || "なし", // 最大震度 (あれば)
+              // 必要に応じて他のプロパティも追加
+              // title: props.ttl || `M${props.magnitude} 地震`, // タイトル
+              // json: props.json, // 詳細JSONパス
+              // ... propsの他のフィールド
+            };
+          });
         }
         return [];
       })
-      .catch(error => {
-         console.error(`気象庁GeoJSONデータ取得中に例外が発生しました (URL: ${url}):`, error);
-         return [];
+      .catch((error) => {
+        console.error(
+          `気象庁GeoJSONデータ取得中に例外が発生しました (URL: ${url}):`,
+          error
+        );
+        return [];
       })
   );
 
@@ -3285,15 +3291,18 @@ async function fetchJmaHypoData(daysBack = 7) {
     const results = await Promise.all(fetchPromises);
     const allEarthquakeData = results.flat();
 
-   combinedData.jmaHypoData = allEarthquakeData;
-   lastUpdateTimes.jmaHypo = new Date(); // 最終更新日時を記録
-    console.log(`気象庁GeoJSONデータを取得・更新しました。総数: ${allEarthquakeData.length}`);
+    combinedData.jmaHypoData = allEarthquakeData;
+    lastUpdateTimes.jmaHypo = new Date(); // 最終更新日時を記録
+    console.log(
+      `気象庁GeoJSONデータを取得・更新しました。総数: ${allEarthquakeData.length}`
+    );
 
     // 統合表示を更新
     updateCombinedDisplay();
-
   } catch (error) {
-    console.error('気象庁GeoJSONデータの取得または統合中にエラーが発生しました:', error);
+    console.error(
+      "気象庁GeoJSONデータの取得または統合中にエラーが発生しました:",
+      error
+    );
   }
 }
-

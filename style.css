@@ -557,7 +557,7 @@ p {
 
 /* 地図の表示領域を指定 */
 #map {
-  height: 80vh;
+  height: 94vh;
   width: 100%;
 }
 
@@ -587,7 +587,7 @@ p {
 }
 
 .tab-content {
-  padding: 20px;
+  padding: 0px;
   background-color: #000000;
 }
 
@@ -617,7 +617,7 @@ body {
 }
 
 .fancy-tab-container {
-  width: 100%;
+  width: 210%;
   max-width: 100vw;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
