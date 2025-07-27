@@ -17,6 +17,7 @@ let combinedData = {
 };
 
 let markerGroup = null; // マーカーのグループを保持する変数
+let priactive = null; // 現在アクティブなマーカーを保持する変数
 
 // 通知関連変数
 let enableNotification = true;
@@ -574,14 +575,14 @@ function connectCea() {
           JSON.stringify({ type: "pong", timestamp: data.timestamp })
         );
       } else if (data.type === "initial" || data.type === "update") {
-        lastUpdateTimes.cea = new Date();
+        lastUpdateTimes.ceaEew = new Date();
         updateCeaDisplay(data.Data);
       }
     } catch (error) {
       console.error("CEAデータ解析エラー:", error);
     }
 
-    updateCombinedDisplay();
+    //updateCombinedDisplay();
   };
 
   ceaEewWs.onclose = () => {
@@ -618,21 +619,21 @@ function connectIcl() {
       if (data.type === "heartbeat") {
         iclWs.send(JSON.stringify({ type: "pong", timestamp: data.timestamp }));
       } else if (data.type === "initial" || data.type === "update") {
-        lastUpdateTimes.icl = new Date();
+        lastUpdateTimes.iclEew = new Date();
         updateIclDisplay(data.Data);
       }
     } catch (error) {
       console.error("ICLデータ解析エラー:", error);
     }
 
-    updateCombinedDisplay();
+    //updateCombinedDisplay();
   };
 
   iclWs.onclose = () => {
     connections.icl = false;
     iclStatus.textContent = "接続状況: 切断されました";
     iclStatus.className = "status disconnected";
-    setTimeout(connectIcl, 30000); // 30秒後に再接続
+    setTimeout(connectIcl, 3000); // 30秒後に再接続
   };
 
   iclWs.onerror = (error) => {
@@ -1618,7 +1619,15 @@ function updateCombinedDisplay() {
   // 表示更新
   combinedEqList.innerHTML = "";
   // 関数を呼び出して地図を表示
-  initMapWithMarkers(map, combinedData);
+// === 修正箇所 3 (オプション): 地図マーカーの更新条件を確認 ===
+// 関数を呼び出して地図を表示 (地図が初期化されている場合のみ)
+if (map) { // ✅ map が存在する場合のみ実行
+    console.log("updateCombinedDisplay: 地図にマーカーを表示します");
+    initMapWithMarkers(map, combinedData);
+} else {
+    console.log("updateCombinedDisplay: 地図が初期化されていないため、マーカー表示をスキップします");
+}
+// === 修正箇所 3 ここまで ===
 
   if (allData.length === 0) {
     combinedEqList.innerHTML = "<p class='no-data'>地震情報がありません</p>";
@@ -1631,10 +1640,19 @@ function updateCombinedDisplay() {
   countElement.textContent = allData.length;
 
     const activeTabId = document.querySelector('.tab-content.active')?.id;
-    if (activeTabId === 'tab2.1') {
-        console.log("データ更新: tab2.1 がアクティブのためグラフを更新します");
-        updatePlotlyGraph('plotly-graph-2-1'); // ✅ 関数名とIDを一致させる
-    } else if (activeTabId === 'tab2.2') {
+   if(activeTabId === 'tab2.1'){
+    var preactive = "tab2_1"; // 初期値を設定
+   }
+   else if(activeTabId === 'tab2.2'){
+    var preactive = "tab2_2"; // 初期値を設定
+   }
+
+    if (activeTabId === 'tab2.1' && preactive !== "tab2_1") {
+      preactive = "tab2_1";
+      console.log("データ更新: tab2.1 がアクティブのためグラフを更新します");
+      updatePlotlyGraph('plotly-graph-2-1'); // ✅ 関数名とIDを一致させる
+    } else if (activeTabId === 'tab2.2' && preactive !== "tab2_2") {
+        preactive = "tab2_2";
         console.log("データ更新: tab2.2 がアクティブのため球面グラフを更新します");
         updatePlotlySphereGraph('plotly-graph-2-2'); // ✅ 関数名とIDを一致させる
     }
@@ -2966,27 +2984,30 @@ function initMapWithMarkers(map, markers) {
 
 window.addEventListener("load", function () {
   console.log("ページロード完了イベント発火");
-  try {
-    // 地図を初期化
-    map = initMap();
-    console.log("地図初期化完了");
+  // --- 修正箇所 1: tab2 の地図初期化を削除 ---
+    // 以下のコードブロックをコメントアウトまたは削除します。
+    /*
+    try {
+        console.log("地図を初期化します...");
+        map = initMap(); // 初期化
+        console.log("地図初期化完了");
 
-    // 少し遅延させて地図のサイズを再計算
-    // DOMが完全にレンダリングされるのを待つため
-    setTimeout(() => {
-      if (map) {
-        console.log("地図サイズを再計算します");
-        map.invalidateSize();
-        console.log("地図サイズ再計算完了");
-
-        // 必要に応じて、初期マーカーを表示
-        // (updateCombinedDisplayが自動的に呼び出される場合は不要)
-        // initMapWithMarkers(map, combinedData);
-      }
-    }, 200); // 200msの遅延
-  } catch (error) {
-    console.error("loadイベントでの地図初期化中にエラーが発生しました:", error);
-  }
+        // invalidateSize を遅延させて実行 (タブ切り替え時と同じ)
+        setTimeout(() => {
+            if (map) {
+                console.log("地図サイズを再計算します");
+                map.invalidateSize();
+                console.log("地図サイズ再計算完了");
+                // 必要に応じて、初期マーカーを表示
+                // (updateCombinedDisplayが自動的に呼び出される場合は不要)
+                // initMapWithMarkers(map, combinedData);
+            }
+        }, 200); // 200msの遅延
+    } catch (error) {
+        console.error("loadイベントでの地図初期化中にエラーが発生しました:", error);
+    }
+    */
+    // --- 修正箇所 1 ここまで ---
 });
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -3089,28 +3110,56 @@ document.addEventListener("DOMContentLoaded", function () {
         // インジケーターの更新
         updateIndicator();
 
-        // 修正箇所 5: タブ切り替え時に地図サイズを再計算
-         // 修正箇所 5: タブ切り替え時に地図サイズを再計算
-                if (map && button.dataset.tab === 'tab2') { // 地図タブの場合
-                    console.log("タブ切り替え: 地図サイズを再計算します");
-                    setTimeout(() => {
-                        map.invalidateSize();
-                        console.log("タブ切り替え: 地図サイズ再計算完了");
-                    }, 100);
+       // === 修正箇所 2: タブ切り替え時の処理を追加/修正 ===
+                // tab2 (地図) がアクティブになったときの処理
+                if (button.dataset.tab === 'tab2') {
+                    console.log("tab2 がアクティブ: 地図の状態を確認します");
+                    if (!map) {
+                        console.log("地図が初期化されていません。初期化を開始します...");
+                        try {
+                            map = initMap(); // 地図を初期化
+                            console.log("tab2: 地図初期化完了");
+                            // invalidateSize を遅延させて実行
+                            setTimeout(() => {
+                                if (map) {
+                                    console.log("tab2: 地図サイズを再計算します");
+                                    map.invalidateSize();
+                                    console.log("tab2: 地図サイズ再計算完了");
+                                    // 地図が初期化された直後は、おそらく updateCombinedDisplay も
+                                    // 呼び出されるか、手動でマーカーを追加する必要があるかもしれません。
+                                    // ここでは updateCombinedDisplay が他の場所で呼び出されると仮定します。
+                                    // 必要に応じて、直後にマーカーを追加:
+                                    // initMapWithMarkers(map, combinedData); // combinedData が利用可能か確認
+                                }
+                            }, 200); // 200msの遅延
+                        } catch (error) {
+                           console.error("tab2: 地図初期化中にエラーが発生しました:", error);
+                        }
+                    } else {
+                        console.log("tab2: 地図は既に初期化されています。サイズを再計算します");
+                        // 地図が既に存在する場合は、サイズを再計算
+                        setTimeout(() => {
+                            if (map) {
+                                map.invalidateSize();
+                                console.log("tab2: 地図サイズ再計算完了");
+                            }
+                        }, 100); // 少し遅延させて実行
+                    }
                 }
-                // === 修正箇所 6: タブ切り替え時にグラフを描画 (ID 修正) ===
-                // tab2.1 がアクティブになったときにグラフを描画
+
+                // tab2.1 がアクティブになったときの処理 (変更なし、または必要に応じて調整)
                 if (button.dataset.tab === 'tab2.1') {
                     console.log("tab2.1 がアクティブ: グラフを描画します");
                     // updateCombinedDisplay で最新の allData が準備されている前提
-                    // タブ切り替え時にも描画を試みるが、データがない場合は関数内で処理
-                    updatePlotlyGraph('plotly-graph-2-1'); // ✅ 関数名とIDを一致させる
+                    updatePlotlyGraph('plotly-graph-2-1');
                 }
-                // tab2.2 がアクティブになったときに球面グラフを描画
+
+                // tab2.2 がアクティブになったときの処理 (変更なし、または必要に応じて調整)
                 if (button.dataset.tab === 'tab2.2') {
                     console.log("tab2.2 がアクティブ: 球面グラフを描画します");
-                    updatePlotlySphereGraph('plotly-graph-2-2'); // ✅ 関数名とIDを一致させる
+                    updatePlotlySphereGraph('plotly-graph-2-2');
                 }
+                // === 修正箇所 2 ここまで ===
       });
     });
 
@@ -3425,7 +3474,7 @@ function updatePlotlyGraph(containerId = 'plotly-graph-2-1') {
                 text: indices.map(i => hoverTexts[i]), // ホバーテキスト
                 hoverinfo: 'text',
                 marker: {
-                    size: indices.map(i => Math.max(2, magnitudes[i] * 2)), // 最小サイズを設定
+                    size: indices.map(i => Math.max(2, (2 + magnitudes[i]) * 2)), // 最小サイズを設定
                     sizemode: 'diameter',
                     // color: indices.map(i => depths[i]), // 色を深さに応じて変える場合
                     // colorscale: 'Viridis',
@@ -3586,7 +3635,7 @@ function updatePlotlySphereGraph(containerId = 'plotly-graph-2-2') {
                 text: indices.map(i => hoverTexts[i]),
                 hoverinfo: 'text',
                 marker: {
-                    size: indices.map(i => Math.max(2, magnitudes[i] * 1.5)),
+                    size: indices.map(i => Math.max(2, (2 + magnitudes[i]) * 2)),
                     sizemode: 'diameter',
                     opacity: 0.8
                 }
