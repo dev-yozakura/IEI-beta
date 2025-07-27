@@ -19,14 +19,152 @@ let combinedData = {
 let markerGroup = null; // マーカーのグループを保持する変数
 let priactive = null; // 現在アクティブなマーカーを保持する変数
 
-// 通知関連変数
-let enableNotification = true;
-let soundNotification = false;
-let lastNotificationId = null;
-let lastNotificationTime = null;
-let magThreshold = 4.0;
-let processedIds = new Set(); // 既に通知したIDを記録
+// --- 通知レベルの定義 ---
+// マグニチュードに応じた通知レベル設定
+const NOTIFICATION_LEVELS = {
+  LOW: {
+    minMag: 0,
+    maxMag: 3.9, // 4.0未満
+    sound: "Shindo0.mp3",
+    vibrate: [100],
+    icon: "favicon_low.ico",
+    label: "低"
+  },
+  MEDIUM: {
+    minMag: 4.0,
+    maxMag: 5.9, // 6.0未満
+    sound: "Shindo1.mp3",
+    vibrate: [200, 100, 200],
+    icon: "favicon_medium.ico",
+    label: "中"
+  },
+  HIGH: {
+    minMag: 6.0,
+    maxMag: Infinity, // 6.0以上
+    sound: "Shindo2.mp3",
+    vibrate: [400, 200, 400, 200, 400],
+    icon: "favicon_high.ico",
+    label: "高"
+  }
+};
 
+// --- 通知関連のグローバル変数 (既存の変数を置き換えまたは追加) ---
+ let enableNotification = true; // 既存
+ let soundNotification = false; // 既存
+ let magThreshold = 4.0; // 既存
+let lastNotificationId = null; // 既存、通知重複防止用
+let processedIds = new Set(); // 既存、通知済みID記録用
+
+// --- 新規データ検知とレベル別通知 ---
+// 統合された allData 配列から新しい地震情報を検出し、マグニチュードに応じて通知
+function checkNewEarthquake(dataArray) {
+  if (!enableNotification) return;
+
+  dataArray.forEach((item) => {
+    // --- ユニークなIDの生成 ---
+    // 各データソースのIDフィールドを考慮して、できるだけ一意なIDを生成
+    const uniqueId = item.id || item.eid || item.EventID || item.eventId || item.code || item.EventId || item.EventCode ||
+                     `${item.time_full || item.time || item.shockTime || item.DateTime}_${item.lat}_${item.lng}_${item.magnitude}`;
+    
+    // 既に処理済みまたは通知済みならスキップ
+    if (processedIds.has(uniqueId) || lastNotificationId === uniqueId) return;
+
+    // --- マグニチュードの取得とチェック ---
+    const mag = parseFloat(item.magnitude);
+    if (isNaN(mag)) {
+      console.warn("checkNewEarthquake: マグニチュードが無効です", item.magnitude, item);
+      return; // マグニチュードが無効な場合はスキップ
+    }
+
+    // グローバルなマグニチュード閾値チェック
+    if (mag < magThreshold) return;
+
+    // --- 通知レベルの判定 ---
+    let notificationLevel = null;
+    for (const [levelName, levelConfig] of Object.entries(NOTIFICATION_LEVELS)) {
+        if (mag >= levelConfig.minMag && mag <= levelConfig.maxMag) {
+            notificationLevel = levelConfig;
+            break;
+        }
+    }
+
+    // 通知レベルが見つからない場合（念のため）
+    if (!notificationLevel) {
+        console.warn("checkNewEarthquake: 通知レベルが判定できませんでした。", mag, item);
+        // デフォルトでMEDIUMレベルを使用するか、スキップする
+        notificationLevel = NOTIFICATION_LEVELS.MEDIUM; 
+        // return; // スキップする場合はこちら
+    }
+
+    // --- 通知内容の作成 ---
+    const title = item.Title || item.title || "新しい地震情報";
+    const timeStr = item.time_full || item.time || item.shockTime || item.DateTime || "不明";
+    const locationStr = item.location || item.placeName || "不明";
+    const magStr = isNaN(mag) ? "不明" : mag.toFixed(1);
+    const depthStr = item.depth || item.Depth || "不明";
+
+    const body = `発生時刻: ${timeStr}\n震源地: ${locationStr}\nマグニチュード: ${magStr}\n深さ: ${depthStr}\n通知レベル: ${notificationLevel.label}`;
+
+    // --- 通知の実行 ---
+    showNotification(title, body, notificationLevel, uniqueId);
+
+    // --- 処理済みとして記録 ---
+    processedIds.add(uniqueId);
+    lastNotificationId = uniqueId; // 重複防止用にも記録
+  });
+}
+
+// --- ブラウザ通知と音声通知を表示 (レベル別対応版) ---
+function showNotification(title, body, levelSettings, itemId) {
+  if (!enableNotification || Notification.permission !== "granted") {
+    console.log("通知が許可されていないか、無効です。");
+    return;
+  }
+
+  // --- ブラウザ通知の作成 ---
+  const notificationOptions = {
+    body: body,
+    icon: levelSettings.icon || "favicon.ico", // レベル設定にアイコンがなければデフォルト
+    vibrate: levelSettings.vibrate || [200], // レベル設定にバイブがなければデフォルト
+    tag: `earthquake-alert-${itemId}`, // アイテムIDでタグ付けし、同じ地震の通知が重複しないようにする
+    renotify: true, // 同じタグの通知が来たら上書きして再通知
+    requireInteraction: true // ユーザーが操作するまで通知を閉じない (オプション)
+  };
+
+  const notification = new Notification(title, notificationOptions);
+
+  // 通知のクリックイベント
+  notification.addEventListener("click", () => {
+    window.focus();
+    notification.close();
+  });
+
+  // --- 音声通知（オプション）---
+  if (soundNotification && levelSettings.sound) {
+    // 複数の通知が同時に来た場合に音が重ならないように、既存の再生を停止するか確認
+    // ここでは単純に再生を試みる
+    const audio = new Audio(levelSettings.sound);
+    audio.play().catch(e => {
+        console.error("音声再生エラー:", e);
+        // iOS Safariなどではユーザー操作がないと再生できない場合がある
+    });
+  }
+
+  // --- 通知ログを追加（デバッグ用）---
+  const logContainer = document.getElementById("notificationLog");
+  if (logContainer) {
+    const logEntry = document.createElement("div");
+    logEntry.style.margin = "5px 0";
+    logEntry.style.padding = "5px";
+    logEntry.style.borderLeft = `5px solid ${levelSettings === NOTIFICATION_LEVELS.LOW ? 'green' : levelSettings === NOTIFICATION_LEVELS.MEDIUM ? 'orange' : 'red'}`;
+    logEntry.innerHTML = `<strong>[レベル: ${levelSettings.label}] ${title}</strong><br>${body.replace(/\n/g, '<br>')}`;
+    logContainer.prepend(logEntry);
+    // ログが多すぎないように制限するのも良い
+    // while (logContainer.children.length > 50) { // 例: 最大50件
+    //   logContainer.removeChild(logContainer.lastChild);
+    // }
+  }
+}
 // 接続状態
 let connections = {
   jmaEew: false,
@@ -162,175 +300,14 @@ let iclLastUpdate = null;
 
 //emsc 地震情報用変数
 let emscLastUpdate = null;
-// ブラウザ通知の許可をリクエスト
-function requestNotificationPermission() {
-  if (!("Notification" in window)) {
-    console.error("ブラウザ通知がサポートされていません");
-    return;
-  }
 
-  Notification.requestPermission().then((permission) => {
-    if (permission === "granted") {
-      console.log("通知の許可が得られました");
-    } else {
-      console.warn("通知の許可がありません");
-    }
-  });
-}
 
-// ブラウザ通知を表示
-function showNotification(title, body) {
-  if (!enableNotification || Notification.permission !== "granted") return;
 
-  // 通知の作成
-  const notification = new Notification(title, {
-    body: body,
-    icon: "favicon.ico", // アイコンを指定
-    vibrate: [200, 100, 200], // バイブレーション
-    tag: "earthquake-alert",
-  });
 
-  // 通知のクリックイベント
-  notification.addEventListener("click", () => {
-    window.focus();
-    notification.close();
-  });
 
-  // 音声通知（オプション）
-  if (soundNotification) {
-    const audio = new Audio("Shindo0.mp3"); // 音声ファイルを指定
-    audio.play();
-  }
 
-  // 通知ログを追加（デバッグ用）
-  const logEntry = document.createElement("div");
-  logEntry.style.margin = "5px 0";
-  logEntry.innerHTML = `<strong>${title}</strong><br>${body}`;
-  document.getElementById("notificationLog").prepend(logEntry);
-}
 
-// 地震情報が更新されたときに通知を送信
-function checkAndNotify(data, source) {
-  if (!enableNotification || !data) return;
 
-  // 通知の重複を防止（同じIDの通知はスキップ）
-  const currentId =
-    data.id ||
-    data.EventID ||
-    data.eventId ||
-    data.code ||
-    data.EventId ||
-    data.EventCode;
-
-  if (lastNotificationId === currentId) return;
-  lastNotificationId = currentId;
-
-  // 通知内容の作成
-  let title = "地震情報";
-  let body = "";
-
-  switch (source) {
-    case "jma_eew":
-      title = "JMA 緊急地震速報";
-      body = `震源地: ${data.WarnArea || data.Hypocenter}\nマグニチュード: ${
-        data.Magunitude || data.magnitude
-      }\n最大震度: ${data.MaxIntensity || data.intensity}`;
-      break;
-
-    case "sc_eew":
-      title = "四川地震局 地震警報";
-      body = `震源地: ${data.HypoCenter}\nマグニチュード: ${data.Magunitude}\n最大烈度: ${data.MaxIntensity}`;
-      break;
-
-    case "fj_eew":
-      title = "福建地震局 地震警報";
-      body = `震源地: ${data.HypoCenter}\nマグニチュード: ${data.Magunitude}\n最大烈度: ${data.MaxIntensity}`;
-      break;
-
-    case "cenc":
-      title = "中国地震台網 地震情報";
-      body = `震源地: ${data.location}\nマグニチュード: ${data.magnitude}\n最大烈度: ${data.intensity}`;
-      break;
-    case "emsc":
-      title = "EMSC 地震情報";
-      body = `震源地: ${data.location}\nマグニチュード: ${data.magnitude}\n深さ: ${data.depth} km`;
-      break;
-
-    case "usgs":
-      title = "USGS 地震情報";
-      body = `震源地: ${data.location}\nマグニチュード: ${data.magnitude}\n深さ: ${data.depth} km`;
-      break;
-
-    case "bmkg":
-      title = "BMKG 地震情報";
-      body = `震源地: ${data.location}\nマグニチュード: ${data.magnitude}\n津波の可能性: ${data.tsunamiPotential}`;
-      break;
-
-    case "bmkg_m5":
-      title = "BMKG M5.0+ 地震情報";
-      body = `震源地: ${data.location}\nマグニチュード: ${data.magnitude}\n深さ: ${data.depth} km`;
-      break;
-
-    case "cea":
-      title = "中国地震局 地震情報";
-      body = `震源地: ${data.placeName}\nマグニチュード: ${data.magnitude}\n最大烈度: ${data.epiIntensity}`;
-      break;
-
-    case "icl":
-      title = "成都高新防災減災研究所 地震情報";
-      body = `震源地: ${data.placeName}\nマグニチュード: ${data.magnitude}\n最大烈度: ${data.epiIntensity}`;
-      break;
-
-    default:
-      title = "新しい地震情報";
-      body = `震源地: ${data.location || data.placeName}\nマグニチュード: ${
-        data.magnitude
-      }\n最大震度: ${data.MaxIntensity || data.intensity || data.epiIntensity}`;
-  }
-
-  // 通知を表示
-  showNotification(title, body);
-}
-
-// 通知権限の確認
-function initNotifications() {
-  if (!("Notification" in window)) {
-    console.log("このブラウザは通知をサポートしていません");
-    return;
-  }
-
-  if (Notification.permission !== "granted") {
-    Notification.requestPermission();
-  }
-}
-
-// 新規データ検知と通知
-function checkNewEarthquake(dataArray) {
-  if (!enableNotification) return;
-
-  dataArray.forEach((item) => {
-    // ユニークなIDの生成（例: time + location + mag）
-    const id = `${
-      item.time_full || item.time || item.shockTime || item.DateTime
-    }_${item.location || item.placeName}_${item.magnitude}`;
-
-    // 既に通知済みならスキップ
-    if (processedIds.has(id)) return;
-
-    // マグニチュードの閾値チェック
-    const mag = parseFloat(item.magnitude);
-    if (isNaN(mag) || mag < magThreshold) return;
-
-    // 通知を出す
-    const title = item.Title || item.title || item.placeName;
-    const body = `発生時刻: ${item.shockTime || item.time}\n震源地: ${
-      item.location || item.placeName
-    }\nマグニチュード: ${mag}`;
-
-    showNotification("地震情報", body);
-    processedIds.add(id);
-  });
-}
 
 // 中央気象署（台湾）地震情報表示更新
 function updateCwaEqList(data) {
@@ -1443,8 +1420,7 @@ function updateCombinedDisplay() {
   // すべてのデータを統合
   allData.length = 0;
 
-  // 新規データ検知
-  checkNewEarthquake(allData);
+
 
   // JMA 緊急地震速報
   if (showJMA && combinedData.jmaEew) {
@@ -1619,24 +1595,33 @@ function updateCombinedDisplay() {
   // 表示更新
   combinedEqList.innerHTML = "";
   // 関数を呼び出して地図を表示
-// === 修正箇所 3 (オプション): 地図マーカーの更新条件を確認 ===
-// 関数を呼び出して地図を表示 (地図が初期化されており、かつ tab2 がアクティブな場合のみ)
-    const isTab2Active = document.getElementById('tab2')?.classList.contains('active');
+  // === 修正箇所 3 (オプション): 地図マーカーの更新条件を確認 ===
+  // 関数を呼び出して地図を表示 (地図が初期化されており、かつ tab2 がアクティブな場合のみ)
+  const isTab2Active = document
+    .getElementById("tab2")
+    ?.classList.contains("active");
 
-    if (map && isTab2Active) { // ✅ map が存在し、かつ tab2 がアクティブな場合のみ実行
-        console.log("updateCombinedDisplay: 地図にマーカーを表示します (tab2 アクティブ)");
-        initMapWithMarkers(map, combinedData);
-    } else if (map) {
-        console.log("updateCombinedDisplay: 地図は初期化されていますが、tab2 は非アクティブです。マーカー更新をスキップします。");
-        // オプション: tab2 が非アクティブな場合でも、地図のデータ（マーカー）だけは更新しておきたい場合
-        // （ただし表示はされない）。これはパフォーマンス的に微妙な場合もあるので注意。
-        // 例えば、次に tab2 を開いたときに最新のマーカーが表示されるようにしたい場合。
-        // その場合は、以下のように条件を緩和できます:
-        // initMapWithMarkers(map, combinedData); // map があるなら更新
-    } else {
-        // map が未初期化 (tab2 がまだ開かれていないなど)
-        console.log("updateCombinedDisplay: 地図が初期化されていないため、マーカー表示をスキップします。");
-    }
+  if (map && isTab2Active) {
+    // ✅ map が存在し、かつ tab2 がアクティブな場合のみ実行
+    console.log(
+      "updateCombinedDisplay: 地図にマーカーを表示します (tab2 アクティブ)"
+    );
+    initMapWithMarkers(map, combinedData);
+  } else if (map) {
+    console.log(
+      "updateCombinedDisplay: 地図は初期化されていますが、tab2 は非アクティブです。マーカー更新をスキップします。"
+    );
+    // オプション: tab2 が非アクティブな場合でも、地図のデータ（マーカー）だけは更新しておきたい場合
+    // （ただし表示はされない）。これはパフォーマンス的に微妙な場合もあるので注意。
+    // 例えば、次に tab2 を開いたときに最新のマーカーが表示されるようにしたい場合。
+    // その場合は、以下のように条件を緩和できます:
+    // initMapWithMarkers(map, combinedData); // map があるなら更新
+  } else {
+    // map が未初期化 (tab2 がまだ開かれていないなど)
+    console.log(
+      "updateCombinedDisplay: 地図が初期化されていないため、マーカー表示をスキップします。"
+    );
+  }
   if (allData.length === 0) {
     combinedEqList.innerHTML = "<p class='no-data'>地震情報がありません</p>";
     combinedStatus.textContent = "最新更新: データがありません";
@@ -1647,23 +1632,22 @@ function updateCombinedDisplay() {
   // アイテム数を表示
   countElement.textContent = allData.length;
 
-    const activeTabId = document.querySelector('.tab-content.active')?.id;
-   if(activeTabId === 'tab2.1'){
+  const activeTabId = document.querySelector(".tab-content.active")?.id;
+  if (activeTabId === "tab2.1") {
     var preactive = "tab2_1"; // 初期値を設定
-   }
-   else if(activeTabId === 'tab2.2'){
+  } else if (activeTabId === "tab2.2") {
     var preactive = "tab2_2"; // 初期値を設定
-   }
+  }
 
-    if (activeTabId === 'tab2.1' && preactive !== "tab2_1") {
-      preactive = "tab2_1";
-      console.log("データ更新: tab2.1 がアクティブのためグラフを更新します");
-      updatePlotlyGraph('plotly-graph-2-1'); // ✅ 関数名とIDを一致させる
-    } else if (activeTabId === 'tab2.2' && preactive !== "tab2_2") {
-        preactive = "tab2_2";
-        console.log("データ更新: tab2.2 がアクティブのため球面グラフを更新します");
-        updatePlotlySphereGraph('plotly-graph-2-2'); // ✅ 関数名とIDを一致させる
-    }
+  if (activeTabId === "tab2.1" && preactive !== "tab2_1") {
+    preactive = "tab2_1";
+    console.log("データ更新: tab2.1 がアクティブのためグラフを更新します");
+    updatePlotlyGraph("plotly-graph-2-1"); // ✅ 関数名とIDを一致させる
+  } else if (activeTabId === "tab2.2" && preactive !== "tab2_2") {
+    preactive = "tab2_2";
+    console.log("データ更新: tab2.2 がアクティブのため球面グラフを更新します");
+    updatePlotlySphereGraph("plotly-graph-2-2"); // ✅ 関数名とIDを一致させる
+  }
   // 各項目を表示
   allData.forEach((item, index) => {
     const container = document.createElement("div");
@@ -1922,8 +1906,8 @@ function updateCombinedDisplay() {
   );
 
   combinedStatus.textContent = `最新更新: ${formatTimeAgo(latestTime)}`;
-
-
+  checkNewEarthquake(allData); // allData は updateCombinedDisplay 内で作成される統合データ配列
+showNotification(allData); // 通知を表示
 }
 // 時刻差フォーマット
 function formatTimeAgo(time) {
@@ -2200,7 +2184,7 @@ function connectJmaEew() {
       } else if (data.type === "jma_eew") {
         updateJmaEewDisplay(data);
       } else if (data.type === "update") {
-        checkNewEarthquake([data.Data]);
+        ;
       }
       updateCombinedDisplay();
     } catch (error) {
@@ -2614,14 +2598,7 @@ function startAutoFetch() {
   alert(`${interval}秒ごとに自動取得を開始しました`);
 }
 
-// 通知設定のイベントリスナー
-document.getElementById("enableNotification").addEventListener("change", () => {
-  enableNotification = document.getElementById("enableNotification").checked;
 
-  if (enableNotification && Notification.permission !== "granted") {
-    Notification.requestPermission();
-  }
-});
 
 // JMA XMLプルダウン要素
 const jmaXmlSelect = document.getElementById("jmaXmlSelect");
@@ -2832,7 +2809,6 @@ connectEmscEqList();
 fetchBmkgData(); // 修正: 初期取得を追加
 fetchBmkg_M5Data(); // BMKG M5.0+ 地震情報
 fetchUsgsData();
-initNotifications();
 fetchCwaData(); // CWA 地震情報
 fetchCwaTinyData(); // CWA Tiny 地震情報
 fetchJmaHypoData(HypoDate); // JMA Hypoデータを初期取得
@@ -2900,7 +2876,7 @@ function getDepthColor(depth) {
 
   if (depth < 10) return "red"; // 赤（浅い）
   else if (depth < 30) return "orange"; // オレンジ
-  else if (depth < 50) return "yellow"; // 黄色 
+  else if (depth < 50) return "yellow"; // 黄色
   else if (depth < 80) return "green"; // 緑
   else if (depth < 100) return "cyan"; // シアン
   else if (depth < 200) return "blue"; // 青
@@ -2993,8 +2969,8 @@ function initMapWithMarkers(map, markers) {
 window.addEventListener("load", function () {
   console.log("ページロード完了イベント発火");
   // --- 修正箇所 1: tab2 の地図初期化を削除 ---
-    // 以下のコードブロックをコメントアウトまたは削除します。
-    /*
+  // 以下のコードブロックをコメントアウトまたは削除します。
+  /*
     try {
         console.log("地図を初期化します...");
         map = initMap(); // 初期化
@@ -3015,7 +2991,7 @@ window.addEventListener("load", function () {
         console.error("loadイベントでの地図初期化中にエラーが発生しました:", error);
     }
     */
-    // --- 修正箇所 1 ここまで ---
+  // --- 修正箇所 1 ここまで ---
 });
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -3118,56 +3094,58 @@ document.addEventListener("DOMContentLoaded", function () {
         // インジケーターの更新
         updateIndicator();
 
-       // === 修正箇所 2: タブ切り替え時の処理を追加/修正 ===
-                // tab2 (地図) がアクティブになったときの処理
-                if (button.dataset.tab === 'tab2') {
-                    console.log("tab2 がアクティブ: 地図の状態を確認します");
-                    if (!map) {
-                        console.log("地図が初期化されていません。初期化を開始します...");
-                        try {
-                            map = initMap(); // 地図を初期化
-                            console.log("tab2: 地図初期化完了");
-                            // invalidateSize を遅延させて実行
-                            setTimeout(() => {
-                                if (map) {
-                                    console.log("tab2: 地図サイズを再計算します");
-                                    map.invalidateSize();
-                                    console.log("tab2: 地図サイズ再計算完了");
-                                    // 地図が初期化された直後は、おそらく updateCombinedDisplay も
-                                    // 呼び出されるか、手動でマーカーを追加する必要があるかもしれません。
-                                    // ここでは updateCombinedDisplay が他の場所で呼び出されると仮定します。
-                                    // 必要に応じて、直後にマーカーを追加:
-                                    // initMapWithMarkers(map, combinedData); // combinedData が利用可能か確認
-                                }
-                            }, 200); // 200msの遅延
-                        } catch (error) {
-                           console.error("tab2: 地図初期化中にエラーが発生しました:", error);
-                        }
-                    } else {
-                        console.log("tab2: 地図は既に初期化されています。サイズを再計算します");
-                        // 地図が既に存在する場合は、サイズを再計算
-                        setTimeout(() => {
-                            if (map) {
-                                map.invalidateSize();
-                                console.log("tab2: 地図サイズ再計算完了");
-                            }
-                        }, 100); // 少し遅延させて実行
-                    }
+        // === 修正箇所 2: タブ切り替え時の処理を追加/修正 ===
+        // tab2 (地図) がアクティブになったときの処理
+        if (button.dataset.tab === "tab2") {
+          console.log("tab2 がアクティブ: 地図の状態を確認します");
+          if (!map) {
+            console.log("地図が初期化されていません。初期化を開始します...");
+            try {
+              map = initMap(); // 地図を初期化
+              console.log("tab2: 地図初期化完了");
+              // invalidateSize を遅延させて実行
+              setTimeout(() => {
+                if (map) {
+                  console.log("tab2: 地図サイズを再計算します");
+                  map.invalidateSize();
+                  console.log("tab2: 地図サイズ再計算完了");
+                  // 地図が初期化された直後は、おそらく updateCombinedDisplay も
+                  // 呼び出されるか、手動でマーカーを追加する必要があるかもしれません。
+                  // ここでは updateCombinedDisplay が他の場所で呼び出されると仮定します。
+                  // 必要に応じて、直後にマーカーを追加:
+                  // initMapWithMarkers(map, combinedData); // combinedData が利用可能か確認
                 }
+              }, 200); // 200msの遅延
+            } catch (error) {
+              console.error("tab2: 地図初期化中にエラーが発生しました:", error);
+            }
+          } else {
+            console.log(
+              "tab2: 地図は既に初期化されています。サイズを再計算します"
+            );
+            // 地図が既に存在する場合は、サイズを再計算
+            setTimeout(() => {
+              if (map) {
+                map.invalidateSize();
+                console.log("tab2: 地図サイズ再計算完了");
+              }
+            }, 100); // 少し遅延させて実行
+          }
+        }
 
-                // tab2.1 がアクティブになったときの処理 (変更なし、または必要に応じて調整)
-                if (button.dataset.tab === 'tab2.1') {
-                    console.log("tab2.1 がアクティブ: グラフを描画します");
-                    // updateCombinedDisplay で最新の allData が準備されている前提
-                    updatePlotlyGraph('plotly-graph-2-1');
-                }
+        // tab2.1 がアクティブになったときの処理 (変更なし、または必要に応じて調整)
+        if (button.dataset.tab === "tab2.1") {
+          console.log("tab2.1 がアクティブ: グラフを描画します");
+          // updateCombinedDisplay で最新の allData が準備されている前提
+          updatePlotlyGraph("plotly-graph-2-1");
+        }
 
-                // tab2.2 がアクティブになったときの処理 (変更なし、または必要に応じて調整)
-                if (button.dataset.tab === 'tab2.2') {
-                    console.log("tab2.2 がアクティブ: 球面グラフを描画します");
-                    updatePlotlySphereGraph('plotly-graph-2-2');
-                }
-                // === 修正箇所 2 ここまで ===
+        // tab2.2 がアクティブになったときの処理 (変更なし、または必要に応じて調整)
+        if (button.dataset.tab === "tab2.2") {
+          console.log("tab2.2 がアクティブ: 球面グラフを描画します");
+          updatePlotlySphereGraph("plotly-graph-2-2");
+        }
+        // === 修正箇所 2 ここまで ===
       });
     });
 
@@ -3284,7 +3262,145 @@ document.addEventListener("DOMContentLoaded", function () {
     console.log("タブ要素が見つかりませんでした");
   }
 
-  // ... 既存の他の DOMContentLoaded 内の処理 ...
+  // ... 既存の他の DOMContentLoaded 内の処理 ...const magThresholdInput = document.getElementById("magThreshold");
+  const magThresholdInput = document.getElementById("magThreshold");
+if (magThresholdInput) {
+  magThresholdInput.value = magThreshold; // 初期値を設定
+  magThresholdInput.addEventListener("change", () => {
+    const newThreshold = parseFloat(magThresholdInput.value);
+    if (!isNaN(newThreshold) && newThreshold >= 0) {
+      magThreshold = newThreshold;
+      // 必要に応じて設定をローカルストレージなどに保存
+    } else {
+       alert("有効な数値を入力してください。");
+       magThresholdInput.value = magThreshold; // 値を元に戻す
+    }
+  });
+}
+const enableNotificationCheckbox = document.getElementById("enableNotification");
+const soundNotificationCheckbox = document.getElementById("soundNotification");
+
+// チェックボックスの状態が変更されたときのイベントリスナーを設定
+if (enableNotificationCheckbox) {
+  enableNotificationCheckbox.addEventListener("change", () => {
+    // チェックボックスの状態をグローバル変数 enableNotification に反映
+    enableNotification = enableNotificationCheckbox.checked;
+    console.log("通知設定が変更されました:", enableNotification);
+
+    // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
+    if (enableNotification && Notification.permission !== "granted") {
+        Notification.requestPermission().then((permission) => {
+            if (permission === "granted") {
+                console.log("通知の許可が得られました。");
+            } else {
+                console.warn("通知の許可がありません。");
+                // チェックボックスの状態を再度更新してUIを同期させる
+                enableNotification = false;
+                enableNotificationCheckbox.checked = false;
+            }
+        }).catch((error) => {
+            console.error("通知許可リクエスト中にエラーが発生しました:", error);
+             enableNotification = false;
+             enableNotificationCheckbox.checked = false;
+        });
+    }
+    // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
+    // 例: updateCombinedDisplay(); // 表示を更新するなど
+  });
+}
+
+if (soundNotificationCheckbox) {
+  soundNotificationCheckbox.addEventListener("change", () => {
+    // チェックボックスの状態をグローバル変数 soundNotification に反映
+    soundNotification = soundNotificationCheckbox.checked;
+    console.log("音声通知設定が変更されました:", soundNotification);
+    // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
+  });
+}
+
+// --- ページ読み込み時の初期化 ---
+// ページ読み込み時に、チェックボックスの状態を現在の変数値と同期させます。
+// (これは、設定がローカルストレージなどから読み込まれた場合に重要です)
+document.addEventListener("DOMContentLoaded", function() {
+    if (enableNotificationCheckbox) {
+        enableNotificationCheckbox.checked = enableNotification;
+    }
+    if (soundNotificationCheckbox) {
+        soundNotificationCheckbox.checked = soundNotification;
+    }
+});
+// --- 通知設定チェックボックスの状態管理関数 ---
+function initNotificationSettings() {
+  // チェックボックス要素を取得
+  const enableNotificationCheckbox = document.getElementById("enableNotification");
+  const soundNotificationCheckbox = document.getElementById("soundNotification");
+
+  // チェックボックスの状態が変更されたときのイベントリスナーを設定
+  if (enableNotificationCheckbox) {
+    enableNotificationCheckbox.addEventListener("change", function () {
+      // チェックボックスの状態をグローバル変数 enableNotification に反映
+      enableNotification = this.checked;
+      console.log("通知設定が変更されました:", enableNotification);
+
+      // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
+      if (enableNotification && Notification.permission !== "granted") {
+        Notification.requestPermission().then(function(permission) {
+          if (permission === "granted") {
+            console.log("通知の許可が得られました。");
+          } else {
+            console.warn("通知の許可がありません。");
+            // チェックボックスの状態を再度更新してUIを同期させる
+            enableNotification = false;
+            enableNotificationCheckbox.checked = false;
+          }
+        }).catch(function(error) {
+          console.error("通知許可リクエスト中にエラーが発生しました:", error);
+          enableNotification = false;
+          enableNotificationCheckbox.checked = false;
+        });
+      }
+      // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
+      // 例: updateCombinedDisplay();
+    });
+  } else {
+      console.warn("ID 'enableNotification' のチェックボックスが見つかりません。");
+  }
+
+  if (soundNotificationCheckbox) {
+    soundNotificationCheckbox.addEventListener("change", function () {
+      // チェックボックスの状態をグローバル変数 soundNotification に反映
+      soundNotification = this.checked;
+      console.log("音声通知設定が変更されました:", soundNotification);
+      // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
+    });
+  } else {
+       console.warn("ID 'soundNotification' のチェックボックスが見つかりません。");
+  }
+
+  // --- ページ読み込み時の初期化 ---
+  // ページ読み込み時に、チェックボックスの状態を現在の変数値と同期させます。
+  // (これは、設定がローカルストレージなどから読み込まれた場合に重要です)
+  // ページロード時に初期状態をUIに反映
+  if (enableNotificationCheckbox) {
+      enableNotificationCheckbox.checked = enableNotification;
+  }
+  if (soundNotificationCheckbox) {
+      soundNotificationCheckbox.checked = soundNotification;
+  }
+  initNotificationSettings(); // 初期化関数を呼び出す
+}
+
+// --- ページ読み込み完了時に初期化関数を実行 ---
+// この部分は、既存のDOMContentLoadedリスナー内か、スクリプトの最後に配置してください。
+// 例:
+// document.addEventListener("DOMContentLoaded", function() {
+//     // ... 他の初期化コード ...
+//     initNotificationSettings(); // この関数を呼び出す
+//     // ... 他の初期化コード ...
+// });
+
+// または、もしDOMContentLoadedリスナーが既に別に定義されている場合、
+// その中で `initNotificationSettings();` を呼び出してください。
 });
 
 /**
@@ -3388,504 +3504,557 @@ async function fetchJmaHypoData(daysBack = 7) {
 }
 
 // 直交座標 3D 散布図
-function updatePlotlyGraph(containerId = 'plotly-graph-2-1') {
-    try {
-        // updateCombinedDisplay 内のデータ準備ロジックを一部再利用
-        // ただし、allData はグローバル変数または updateCombinedDisplay から渡される必要があります
-        // ここでは updateCombinedDisplay が allData をグローバルに設定していると仮定します
-        // より良い方法は、allData を引数として渡すことです。
+function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
+  try {
+    // updateCombinedDisplay 内のデータ準備ロジックを一部再利用
+    // ただし、allData はグローバル変数または updateCombinedDisplay から渡される必要があります
+    // ここでは updateCombinedDisplay が allData をグローバルに設定していると仮定します
+    // より良い方法は、allData を引数として渡すことです。
 
-        if (!Array.isArray(allData)) { // ✅ typeof 比較を簡略化
-             console.warn("グラフ描画: allData が配列ではありません。");
-             document.getElementById(containerId).innerHTML = '<p>表示するデータがありません (データ形式エラー)。</p>';
-             return;
-        }
-        if (allData.length === 0) { // ✅ データが空の場合もチェック
-             console.warn("グラフ描画: allData が空です。");
-             document.getElementById(containerId).innerHTML = '<p>表示する地震データがありません。</p>';
-             return;
-        }
-
-        // 1. データを準備
-        const lats = []; // 緯度
-        const lons = []; // 経度
-        const depths = []; // 深さ (km)
-        const magnitudes = []; // マグニチュード
-        const hoverTexts = []; // ホバーテキスト
-        const sourceInfo = []; // 情報源
-
-        // allData から必要な情報を抽出 (データ構造に応じて調整)
-        allData.forEach(item => {
-             let lat, lon, depth, mag, location, source;
-
-             // USGS GeoJSON 形式 (例)
-             if (item.geometry && item.properties) {
-                 lat = item.geometry.coordinates[1];
-                 lon = item.geometry.coordinates[0];
-                 depth = item.geometry.coordinates[2];
-                 mag = item.properties.mag;
-                 location = item.properties.place || "不明";
-                 source = "USGS";
-             }
-             // JMA GeoJSON 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
-             else if (item.lat !== undefined && item.lng !== undefined) {
-                 lat = parseFloat(item.lat);
-                 lon = parseFloat(item.lng);
-                 depth = parseFloat(item.depth);
-                 mag = parseFloat(item.magnitude);
-                 location = item.location || item.Title || "不明";
-                 source = item.source || "不明";
-             }
-             // EMSC 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
-             else if (item.type === "Feature" && item.geometry && item.properties) {
-                  const coords = item.geometry.coordinates;
-                  if (coords && coords.length >= 3) {
-                       lon = parseFloat(coords[0]);
-                       lat = parseFloat(coords[1]);
-                       depth = parseFloat(coords[2]);
-                       mag = parseFloat(item.properties.mag);
-                       location = item.properties.place || item.properties.flynn_region || "不明";
-                       source = "EMSC";
-                  }
-             }
-             // 他の形式 (例: CENC, BMKG, CWA 等) もここに追加
-             // ... (他の条件分岐) ...
-
-             // 必須データが存在し、数値に変換可能な場合のみ追加
-             if (!isNaN(lat) && !isNaN(lon) && !isNaN(depth) && !isNaN(mag)) {
-                 lats.push(lat);
-                 lons.push(lon);
-                 depths.push(-depth); // Plotly では深さを負の値で表現するのが一般的 (奥がマイナス)
-                 magnitudes.push(mag);
-                 hoverTexts.push(`場所: ${location}<br>緯度: ${lat.toFixed(4)}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(1)} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`);
-                 sourceInfo.push(source); // 情報源を分類に使用
-             }
-        });
-
-        if (lats.length === 0) {
-             console.warn("グラフ描画: 有効な地震データがありません。");
-             document.getElementById(containerId).innerHTML = '<p>有効な地震データがありません。</p>';
-             return;
-        }
-
-        // 2. データトレースの定義
-        const uniqueSources = [...new Set(sourceInfo)];
-        const traces = uniqueSources.map(src => {
-            const indices = sourceInfo.map((s, i) => s === src ? i : null).filter(i => i !== null);
-            return {
-                type: 'scatter3d',
-                mode: 'markers',
-                x: indices.map(i => lons[i]), // X軸: 経度
-                y: indices.map(i => lats[i]), // Y軸: 緯度
-                z: indices.map(i => depths[i]), // Z軸: 深さ (負の値)
-                name: src, // 凡例に表示される名前
-                text: indices.map(i => hoverTexts[i]), // ホバーテキスト
-                hoverinfo: 'text',
-                marker: {
-                    size: indices.map(i => Math.max(2, (2 + magnitudes[i]) * 2)), // 最小サイズを設定
-                    sizemode: 'diameter',
-                    // color: indices.map(i => depths[i]), // 色を深さに応じて変える場合
-                    // colorscale: 'Viridis',
-                    // colorbar: { title: 'Depth (km)' },
-                    opacity: 0.7
-                }
-            };
-        });
-
-        // 3. レイアウトの定義
-        const layout = {
-            title: '地震データ 3D プロット (緯度/経度/深さ)',
-            font: { color: 'white' },
-            paper_bgcolor: 'gray', // グラフ全体の背景色
-                plot_bgcolor: 'black',  // プロット領域の背景色
-            scene: {
-                xaxis: { title: '経度 (Longitude)' },
-                yaxis: { title: '緯度 (Latitude)' },
-                zaxis: { title: '深さ (Depth km)' }
-            },
-            margin: { l: 0, r: 0, b: 0, t: 50 }
-        };
-
-        // 4. グラフを描画
-        Plotly.react(containerId, traces, layout);
-
-    } catch (error) {
-        console.error("Plotly グラフ描画エラー:", error);
-        document.getElementById(containerId).innerHTML = '<p>グラフの描画中にエラーが発生しました。</p>';
+    if (!Array.isArray(allData)) {
+      // ✅ typeof 比較を簡略化
+      console.warn("グラフ描画: allData が配列ではありません。");
+      document.getElementById(containerId).innerHTML =
+        "<p>表示するデータがありません (データ形式エラー)。</p>";
+      return;
     }
+    if (allData.length === 0) {
+      // ✅ データが空の場合もチェック
+      console.warn("グラフ描画: allData が空です。");
+      document.getElementById(containerId).innerHTML =
+        "<p>表示する地震データがありません。</p>";
+      return;
+    }
+
+    // 1. データを準備
+    const lats = []; // 緯度
+    const lons = []; // 経度
+    const depths = []; // 深さ (km)
+    const magnitudes = []; // マグニチュード
+    const hoverTexts = []; // ホバーテキスト
+    const sourceInfo = []; // 情報源
+
+    // allData から必要な情報を抽出 (データ構造に応じて調整)
+    allData.forEach((item) => {
+      let lat, lon, depth, mag, location, source;
+
+      // USGS GeoJSON 形式 (例)
+      if (item.geometry && item.properties) {
+        lat = item.geometry.coordinates[1];
+        lon = item.geometry.coordinates[0];
+        depth = item.geometry.coordinates[2];
+        mag = item.properties.mag;
+        location = item.properties.place || "不明";
+        source = "USGS";
+      }
+      // JMA GeoJSON 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
+      else if (item.lat !== undefined && item.lng !== undefined) {
+        lat = parseFloat(item.lat);
+        lon = parseFloat(item.lng);
+        depth = parseFloat(item.depth);
+        mag = parseFloat(item.magnitude);
+        location = item.location || item.Title || "不明";
+        source = item.source || "不明";
+      }
+      // EMSC 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
+      else if (item.type === "Feature" && item.geometry && item.properties) {
+        const coords = item.geometry.coordinates;
+        if (coords && coords.length >= 3) {
+          lon = parseFloat(coords[0]);
+          lat = parseFloat(coords[1]);
+          depth = parseFloat(coords[2]);
+          mag = parseFloat(item.properties.mag);
+          location =
+            item.properties.place || item.properties.flynn_region || "不明";
+          source = "EMSC";
+        }
+      }
+      // 他の形式 (例: CENC, BMKG, CWA 等) もここに追加
+      // ... (他の条件分岐) ...
+
+      // 必須データが存在し、数値に変換可能な場合のみ追加
+      if (!isNaN(lat) && !isNaN(lon) && !isNaN(depth) && !isNaN(mag)) {
+        lats.push(lat);
+        lons.push(lon);
+        depths.push(-depth); // Plotly では深さを負の値で表現するのが一般的 (奥がマイナス)
+        magnitudes.push(mag);
+        hoverTexts.push(
+          `場所: ${location}<br>緯度: ${lat.toFixed(4)}<br>経度: ${lon.toFixed(
+            4
+          )}<br>深さ: ${depth.toFixed(1)} km<br>マグニチュード: ${mag.toFixed(
+            1
+          )}<br>情報源: ${source}`
+        );
+        sourceInfo.push(source); // 情報源を分類に使用
+      }
+    });
+
+    if (lats.length === 0) {
+      console.warn("グラフ描画: 有効な地震データがありません。");
+      document.getElementById(containerId).innerHTML =
+        "<p>有効な地震データがありません。</p>";
+      return;
+    }
+
+    // 2. データトレースの定義
+    const uniqueSources = [...new Set(sourceInfo)];
+    const traces = uniqueSources.map((src) => {
+      const indices = sourceInfo
+        .map((s, i) => (s === src ? i : null))
+        .filter((i) => i !== null);
+      return {
+        type: "scatter3d",
+        mode: "markers",
+        x: indices.map((i) => lons[i]), // X軸: 経度
+        y: indices.map((i) => lats[i]), // Y軸: 緯度
+        z: indices.map((i) => depths[i]), // Z軸: 深さ (負の値)
+        name: src, // 凡例に表示される名前
+        text: indices.map((i) => hoverTexts[i]), // ホバーテキスト
+        hoverinfo: "text",
+        marker: {
+          size: indices.map((i) => Math.max(2, (2 + magnitudes[i]) * 2)), // 最小サイズを設定
+          sizemode: "diameter",
+          // color: indices.map(i => depths[i]), // 色を深さに応じて変える場合
+          // colorscale: 'Viridis',
+          // colorbar: { title: 'Depth (km)' },
+          opacity: 0.7,
+        },
+      };
+    });
+
+    // 3. レイアウトの定義
+    const layout = {
+      title: "地震データ 3D プロット (緯度/経度/深さ)",
+      font: { color: "white" },
+      paper_bgcolor: "gray", // グラフ全体の背景色
+      plot_bgcolor: "black", // プロット領域の背景色
+      scene: {
+         aspectmode: "cube",
+        xaxis: { title: "経度 (Longitude)" },
+        yaxis: { title: "緯度 (Latitude)" },
+        zaxis: { title: "深さ (Depth km)" },
+      },
+      margin: { l: 0, r: 0, b: 0, t: 50 },
+    };
+
+    // 4. グラフを描画
+    Plotly.react(containerId, traces, layout);
+  } catch (error) {
+    console.error("Plotly グラフ描画エラー:", error);
+    document.getElementById(containerId).innerHTML =
+      "<p>グラフの描画中にエラーが発生しました。</p>";
+  }
 }
 
 // 球面 3D 散布図
-function updatePlotlySphereGraph(containerId = 'plotly-graph-2-2') {
-   // 非同期関数として定義
-    (async () => {
-        try {
-            // --- allData のチェック (変更なし) ---
-            if (!Array.isArray(allData)) {
-                console.warn("球面グラフ描画: allData が配列ではありません。");
-                document.getElementById(containerId).innerHTML = '<p>表示するデータがありません (データ形式エラー)。</p>';
-                return;
-            }
-            if (allData.length === 0) {
-                console.warn("球面グラフ描画: allData が空です。");
-                document.getElementById(containerId).innerHTML = '<p>表示する地震データがありません。</p>';
-                return;
-            }
-            // --- allData のチェック ここまで ---
+function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
+  // 非同期関数として定義
+  (async () => {
+    try {
+      // --- allData のチェック (変更なし) ---
+      if (!Array.isArray(allData)) {
+        console.warn("球面グラフ描画: allData が配列ではありません。");
+        document.getElementById(containerId).innerHTML =
+          "<p>表示するデータがありません (データ形式エラー)。</p>";
+        return;
+      }
+      if (allData.length === 0) {
+        console.warn("球面グラフ描画: allData が空です。");
+        document.getElementById(containerId).innerHTML =
+          "<p>表示する地震データがありません。</p>";
+        return;
+      }
+      // --- allData のチェック ここまで ---
 
+      // 1. データを準備
+      const lats = [];
+      const lons = [];
+      const depths = []; // km
+      const magnitudes = [];
+      const hoverTexts = [];
+      const sourceInfo = [];
 
-        // 1. データを準備
-        const lats = [];
-        const lons = [];
-        const depths = []; // km
-        const magnitudes = [];
-        const hoverTexts = [];
-        const sourceInfo = [];
+      const x_coords = [];
+      const y_coords = [];
+      const z_coords = [];
 
-        const x_coords = [];
-        const y_coords = [];
-        const z_coords = [];
+      allData.forEach((item) => {
+        let lat, lon, depth, mag, location, source;
 
-        allData.forEach(item => {
-             let lat, lon, depth, mag, location, source;
-
-             if (item.geometry && item.properties) { // USGS
-                 lat = parseFloat(item.geometry.coordinates[1]);
-                 lon = parseFloat(item.geometry.coordinates[0]);
-                 depth = parseFloat(item.geometry.coordinates[2]);
-                 mag = parseFloat(item.properties.mag);
-                 location = item.properties.place || "不明";
-                 source = "USGS";
-             }
-             else if (item.lat !== undefined && item.lng !== undefined) { // JMA
-                 lat = parseFloat(item.lat);
-                 lon = parseFloat(item.lng);
-                 depth = parseFloat(item.depth);
-                 mag = parseFloat(item.magnitude);
-                 location = item.location || item.Title || "不明";
-                 source = item.source || "不明";
-             }
-             else if (item.type === "Feature" && item.geometry && item.properties) { // EMSC
-                  const coords = item.geometry.coordinates;
-                  if (coords && coords.length >= 3) {
-                       lon = parseFloat(coords[0]);
-                       lat = parseFloat(coords[1]);
-                       depth = parseFloat(coords[2]);
-                       mag = parseFloat(item.properties.mag);
-                       location = item.properties.place || item.properties.flynn_region || "不明";
-                       source = "EMSC";
-                  }
-             }
-             // ... 他の形式 ...
-
-             if (!isNaN(lat) && !isNaN(lon) && !isNaN(depth) && !isNaN(mag)) {
-                 lats.push(lat);
-                 lons.push(lon);
-                 depths.push(depth);
-                 magnitudes.push(mag);
-                 hoverTexts.push(`場所: ${location}<br>緯度: ${lat.toFixed(4)}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(1)} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`);
-                 sourceInfo.push(source);
-
-                 // === 球面座標変換 ===
-                 const EARTH_RADIUS_KM = 6370.137; // 地球の半径 (km)
-                 const adjustedRadius = Math.max(0.1, EARTH_RADIUS_KM - depth);
-
-                 const phi = (90 - lat) * (Math.PI / 180); // colatitude
-                 const theta = (lon + 180) * (Math.PI / 180); // longitude 0-360
-
-                 const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
-                 const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
-                 const z = adjustedRadius * Math.cos(phi);
-
-                 x_coords.push(x);
-                 y_coords.push(y);
-                 z_coords.push(z);
-             }
-        });
-
-        if (x_coords.length === 0) {
-             console.warn("球面グラフ描画: 有効な地震データがありません。");
-             document.getElementById(containerId).innerHTML = '<p>有効な地震データがありません。</p>';
-             return;
+        if (item.geometry && item.properties) {
+          // USGS
+          lat = parseFloat(item.geometry.coordinates[1]);
+          lon = parseFloat(item.geometry.coordinates[0]);
+          depth = parseFloat(item.geometry.coordinates[2]);
+          mag = parseFloat(item.properties.mag);
+          location = item.properties.place || "不明";
+          source = "USGS";
+        } else if (item.lat !== undefined && item.lng !== undefined) {
+          // JMA
+          lat = parseFloat(item.lat);
+          lon = parseFloat(item.lng);
+          depth = parseFloat(item.depth);
+          mag = parseFloat(item.magnitude);
+          location = item.location || item.Title || "不明";
+          source = item.source || "不明";
+        } else if (
+          item.type === "Feature" &&
+          item.geometry &&
+          item.properties
+        ) {
+          // EMSC
+          const coords = item.geometry.coordinates;
+          if (coords && coords.length >= 3) {
+            lon = parseFloat(coords[0]);
+            lat = parseFloat(coords[1]);
+            depth = parseFloat(coords[2]);
+            mag = parseFloat(item.properties.mag);
+            location =
+              item.properties.place || item.properties.flynn_region || "不明";
+            source = "EMSC";
+          }
         }
+        // ... 他の形式 ...
 
-        // 2. 地球球体を描画
-        const EARTH_RADIUS_KM = 6378.137;
-        const u = Array.from({length: 50}, (_, i) => (i / 49) * 2 * Math.PI);
-        const v = Array.from({length: 50}, (_, i) => (i / 49) * Math.PI);
+        if (!isNaN(lat) && !isNaN(lon) && !isNaN(depth) && !isNaN(mag)) {
+          lats.push(lat);
+          lons.push(lon);
+          depths.push(depth);
+          magnitudes.push(mag);
+          hoverTexts.push(
+            `場所: ${location}<br>緯度: ${lat.toFixed(
+              4
+            )}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(
+              1
+            )} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`
+          );
+          sourceInfo.push(source);
 
-        const sphere_x = [];
-        const sphere_y = [];
-        const sphere_z = [];
+          // === 球面座標変換 ===
+          const EARTH_RADIUS_KM = 6370.137; // 地球の半径 (km)
+          const adjustedRadius = Math.max(0.1, EARTH_RADIUS_KM - depth);
 
-        for (let i = 0; i < v.length; i++) {
-            const row_x = [];
-            const row_y = [];
-            const row_z = [];
-            for (let j = 0; j < u.length; j++) {
-                const phi = v[i];
-                const theta = u[j];
-                const x = EARTH_RADIUS_KM * Math.sin(phi) * Math.cos(theta);
-                const y = EARTH_RADIUS_KM * Math.sin(phi) * Math.sin(theta);
-                const z = EARTH_RADIUS_KM * Math.cos(phi);
-                row_x.push(x);
-                row_y.push(y);
-                row_z.push(z);
-            }
-            sphere_x.push(row_x);
-            sphere_y.push(row_y);
-            sphere_z.push(row_z);
+          const phi = (90 - lat) * (Math.PI / 180); // colatitude
+          const theta = (lon + 180) * (Math.PI / 180); // longitude 0-360
+
+          const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
+          const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
+          const z = adjustedRadius * Math.cos(phi);
+
+          x_coords.push(x);
+          y_coords.push(y);
+          z_coords.push(z);
         }
+      });
 
-        // 3. トレース定義
-        const uniqueSources = [...new Set(sourceInfo)];
-        const earthquakeTraces = uniqueSources.map(src => {
-            const indices = sourceInfo.map((s, i) => s === src ? i : null).filter(i => i !== null);
-            return {
-                type: 'scatter3d',
-                mode: 'markers',
-                x: indices.map(i => x_coords[i]),
-                y: indices.map(i => y_coords[i]),
-                z: indices.map(i => z_coords[i]),
-                name: src,
-                text: indices.map(i => hoverTexts[i]),
-                hoverinfo: 'text',
-                marker: {
-                    size: indices.map(i => Math.max(2, (2 + magnitudes[i]) * 2)),
-                    sizemode: 'diameter',
-                    opacity: 1
-                }
-            };
-        });
+      if (x_coords.length === 0) {
+        console.warn("球面グラフ描画: 有効な地震データがありません。");
+        document.getElementById(containerId).innerHTML =
+          "<p>有効な地震データがありません。</p>";
+        return;
+      }
 
-        const earthSphereTrace = {
-            type: 'surface',
-            x: sphere_x,
-            y: sphere_y,
-            z: sphere_z,
-            opacity: 0.4,
-            showscale: false,
-            hoverinfo: 'skip',
-            colorscale: [[0, 'lightblue'], [1, 'lightblue']],
-            name: '地球'
+      // 2. 地球球体を描画
+      const EARTH_RADIUS_KM = 6378.137;
+      const u = Array.from({ length: 50 }, (_, i) => (i / 49) * 2 * Math.PI);
+      const v = Array.from({ length: 50 }, (_, i) => (i / 49) * Math.PI);
+
+      const sphere_x = [];
+      const sphere_y = [];
+      const sphere_z = [];
+
+      for (let i = 0; i < v.length; i++) {
+        const row_x = [];
+        const row_y = [];
+        const row_z = [];
+        for (let j = 0; j < u.length; j++) {
+          const phi = v[i];
+          const theta = u[j];
+          const x = EARTH_RADIUS_KM * Math.sin(phi) * Math.cos(theta);
+          const y = EARTH_RADIUS_KM * Math.sin(phi) * Math.sin(theta);
+          const z = EARTH_RADIUS_KM * Math.cos(phi);
+          row_x.push(x);
+          row_y.push(y);
+          row_z.push(z);
+        }
+        sphere_x.push(row_x);
+        sphere_y.push(row_y);
+        sphere_z.push(row_z);
+      }
+
+      // 3. トレース定義
+      const uniqueSources = [...new Set(sourceInfo)];
+      const earthquakeTraces = uniqueSources.map((src) => {
+        const indices = sourceInfo
+          .map((s, i) => (s === src ? i : null))
+          .filter((i) => i !== null);
+        return {
+          type: "scatter3d",
+          mode: "markers",
+          x: indices.map((i) => x_coords[i]),
+          y: indices.map((i) => y_coords[i]),
+          z: indices.map((i) => z_coords[i]),
+          name: src,
+          text: indices.map((i) => hoverTexts[i]),
+          hoverinfo: "text",
+          marker: {
+            size: indices.map((i) => Math.max(2, (2 + magnitudes[i]) * 2)),
+            sizemode: "diameter",
+            opacity: 1,
+          },
         };
+      });
 
-         // === 新規: プレート境界線データの取得と処理 ===
-            let plateBoundariesTrace = null; // 初期化
-            try {
-                console.log("プレート境界データを取得します...");
-                const response = await fetch("https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json");
-                if (!response.ok) {
-                   throw new Error(`プレート境界データ取得エラー: HTTP status ${response.status}`);
-                }
-                const plateData = await response.json();
-                console.log("プレート境界データを取得しました。");
+      const earthSphereTrace = {
+        type: "surface",
+        x: sphere_x,
+        y: sphere_y,
+        z: sphere_z,
+        opacity: 0.5,
+        showscale: false,
+        hoverinfo: "none",
+        colorscale: [
+          [0, "darkgray"],
+          [1, "darkgray"],
+        ],
+        name: "地球",
+      };
 
-                // 境界線の座標を格納する配列
-                const plateX = [];
-                const plateY = [];
-                const plateZ = [];
+      // === 新規: プレート境界線データの取得と処理 ===
+      let plateBoundariesTrace = null; // 初期化
+      try {
+        console.log("プレート境界データを取得します...");
+        const response = await fetch(
+          "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json"
+        );
+        if (!response.ok) {
+          throw new Error(
+            `プレート境界データ取得エラー: HTTP status ${response.status}`
+          );
+        }
+        const plateData = await response.json();
+        console.log("プレート境界データを取得しました。");
 
-                // 各 Feature (境界線セグメント) を処理
-                plateData.features.forEach(feature => {
-                    if (feature.geometry.type === "LineString") {
-                        const coordinates = feature.geometry.coordinates; // [ [lng, lat], [lng, lat], ... ]
-                        coordinates.forEach(coord => {
-                             const lon = coord[0];
-                             const lat = coord[1];
-                             // NaN チェック
-                             if (isNaN(lat) || isNaN(lon)) return;
+        // 境界線の座標を格納する配列
+        const plateX = [];
+        const plateY = [];
+        const plateZ = [];
 
-                             // 球面座標変換 (深さ 0 km として地球表面にプロット)
-                             const adjustedRadius = EARTH_RADIUS_KM; // 表面にプロット
+        // 各 Feature (境界線セグメント) を処理
+        plateData.features.forEach((feature) => {
+          if (feature.geometry.type === "LineString") {
+            const coordinates = feature.geometry.coordinates; // [ [lng, lat], [lng, lat], ... ]
+            coordinates.forEach((coord) => {
+              const lon = coord[0];
+              const lat = coord[1];
+              // NaN チェック
+              if (isNaN(lat) || isNaN(lon)) return;
 
-                             const phi = (90 - lat) * (Math.PI / 180); // colatitude
-                             const theta = (lon + 180) * (Math.PI / 180); // longitude 0-360
+              // 球面座標変換 (深さ 0 km として地球表面にプロット)
+              const adjustedRadius = EARTH_RADIUS_KM; // 表面にプロット
 
-                             const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
-                             const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
-                             const z = adjustedRadius * Math.cos(phi);
+              const phi = (90 - lat) * (Math.PI / 180); // colatitude
+              const theta = (lon + 180) * (Math.PI / 180); // longitude 0-360
 
-                             plateX.push(x);
-                             plateY.push(y);
-                             plateZ.push(z);
-                        });
-                        // 各 LineString の終端に NaN を挿入して、線が繋がりすぎないようにする
-                        plateX.push(NaN);
-                        plateY.push(NaN);
-                        plateZ.push(NaN);
-                    }
-                    // MultiLineString など他の geometry type にも対応可能だが、ここでは LineString のみ処理
+              const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
+              const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
+              const z = adjustedRadius * Math.cos(phi);
+
+              plateX.push(x);
+              plateY.push(y);
+              plateZ.push(z);
+            });
+            // 各 LineString の終端に NaN を挿入して、線が繋がりすぎないようにする
+            plateX.push(NaN);
+            plateY.push(NaN);
+            plateZ.push(NaN);
+          }
+          // MultiLineString など他の geometry type にも対応可能だが、ここでは LineString のみ処理
+        });
+
+        // 境界線トレースを作成
+        if (plateX.length > 0) {
+          plateBoundariesTrace = {
+            type: "scatter3d",
+            mode: "lines", // 線で描画
+            x: plateX,
+            y: plateY,
+            z: plateZ,
+            line: {
+              color: "orange", // 線の色
+              width: 2.5, // 線の太さ
+            },
+            name: "プレート境界",
+            hoverinfo: "skip", // ホバー情報を非表示
+          };
+          console.log("プレート境界線トレースを作成しました。");
+        } else {
+          console.warn(
+            "プレート境界線データから有効なポイントが生成されませんでした。"
+          );
+        }
+      } catch (error) {
+        console.error(
+          "プレート境界データの取得または処理中にエラーが発生しました:",
+          error
+        );
+        // エラーが発生してもグラフの描画は継続
+      }
+      // === 新規: Datamaps World.json データの取得と処理 ===
+      let worldMapTrace = null;
+      try {
+        // ✅ 修正: Datamaps の world.json を使用
+        const WORLD_MAP_URL =
+          "https://raw.githubusercontent.com/markmarkoh/datamaps/master/src/js/data/world.json";
+        console.log("世界地図データ (Datamaps) を取得します...", WORLD_MAP_URL);
+        const response = await fetch(WORLD_MAP_URL);
+        if (!response.ok) {
+          throw new Error(
+            `世界地図データ取得エラー: HTTP status ${response.status}`
+          );
+        }
+        const worldData = await response.json();
+        console.log("世界地図データ (Datamaps) を取得しました。");
+
+        const worldX = [];
+        const worldY = [];
+        const worldZ = [];
+
+        worldData.features.forEach((feature) => {
+          // Polygon と MultiPolygon の両方を処理
+          if (feature.geometry.type === "Polygon") {
+            // Polygon はリングの配列 [ [ [lng, lat], ... ], [ [lng, lat], ... (穴) ] ]
+            feature.geometry.coordinates.forEach((ring) => {
+              // 各リングを処理
+              ring.forEach((coord) => {
+                const lon = coord[0];
+                const lat = coord[1];
+                if (isNaN(lat) || isNaN(lon)) return;
+
+                // 球面座標変換 (地球表面にプロット)
+                const adjustedRadius = EARTH_RADIUS_KM;
+                const phi = (90 - lat) * (Math.PI / 180);
+                const theta = (lon + 180) * (Math.PI / 180);
+
+                const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
+                const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
+                const z = adjustedRadius * Math.cos(phi);
+
+                worldX.push(x);
+                worldY.push(y);
+                worldZ.push(z);
+              });
+              // 各リングの終端に NaN を挿入
+              worldX.push(NaN);
+              worldY.push(NaN);
+              worldZ.push(NaN);
+            });
+            // Polygon 全体の終端にも NaN を挿入 (オプション、Feature間の区切り)
+            worldX.push(NaN);
+            worldY.push(NaN);
+            worldZ.push(NaN);
+          } else if (feature.geometry.type === "MultiPolygon") {
+            // MultiPolygon は Polygon の配列 [ [ [ [lng, lat], ... ], ... ], [ [ [lng, lat], ... ], ... ] ]
+            feature.geometry.coordinates.forEach((polygonCoords) => {
+              // 各 Polygon を処理
+              polygonCoords.forEach((ring) => {
+                // 各リングを処理
+                ring.forEach((coord) => {
+                  const lon = coord[0];
+                  const lat = coord[1];
+                  if (isNaN(lat) || isNaN(lon)) return;
+
+                  const adjustedRadius = EARTH_RADIUS_KM;
+                  const phi = (90 - lat) * (Math.PI / 180);
+                  const theta = (lon + 180) * (Math.PI / 180);
+
+                  const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
+                  const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
+                  const z = adjustedRadius * Math.cos(phi);
+
+                  worldX.push(x);
+                  worldY.push(y);
+                  worldZ.push(z);
                 });
+                // 各リングの終端に NaN を挿入
+                worldX.push(NaN);
+                worldY.push(NaN);
+                worldZ.push(NaN);
+              });
+              // 各 Polygon の終端にも NaN を挿入 (オプション)
+              worldX.push(NaN);
+              worldY.push(NaN);
+              worldZ.push(NaN);
+            });
+            // MultiPolygon 全体の終端にも NaN を挿入 (オプション)
+            worldX.push(NaN);
+            worldY.push(NaN);
+            worldZ.push(NaN);
+          }
+          // 他の geometry type (例: Point, LineString) はここでは無視
+        });
 
-                // 境界線トレースを作成
-                if (plateX.length > 0) {
-                    plateBoundariesTrace = {
-                        type: 'scatter3d',
-                        mode: 'lines', // 線で描画
-                        x: plateX,
-                        y: plateY,
-                        z: plateZ,
-                        line: {
-                            color: 'orange', // 線の色
-                            width: 2.5       // 線の太さ
-                        },
-                        name: 'プレート境界',
-                        hoverinfo: 'skip' // ホバー情報を非表示
-                    };
-                    console.log("プレート境界線トレースを作成しました。");
-                } else {
-                     console.warn("プレート境界線データから有効なポイントが生成されませんでした。");
-                }
+        if (worldX.length > 0) {
+          worldMapTrace = {
+            type: "scatter3d",
+            mode: "lines", // 線で境界を描画
+            x: worldX,
+            y: worldY,
+            z: worldZ,
+            line: {
+              color: "white", // 色を指定 (例: 白)
+              width: 3.8, // 線の太さを指定 (細く)
+            },
+            name: "世界地図境界",
+            hoverinfo: "skip", // 国名などの情報はここでは非表示
+          };
+          console.log("世界地図 (Datamaps) トレースを作成しました。");
+        } else {
+          console.warn(
+            "世界地図データ (Datamaps) から有効なポイントが生成されませんでした。"
+          );
+        }
+      } catch (error) {
+        console.error(
+          "世界地図データ (Datamaps) の取得または処理中にエラーが発生しました:",
+          error
+        );
+        console.warn(
+          "世界地図データの読み込みに失敗しましたが、他の要素は表示されます。"
+        );
+      }
+      // === 新規: Datamaps World.json データの取得と処理 ここまで ===
 
-            } catch (error) {
-                console.error("プレート境界データの取得または処理中にエラーが発生しました:", error);
-                // エラーが発生してもグラフの描画は継続
-            }
-           // === 新規: Datamaps World.json データの取得と処理 ===
-            let worldMapTrace = null;
-            try {
-                // ✅ 修正: Datamaps の world.json を使用
-                const WORLD_MAP_URL = "https://raw.githubusercontent.com/markmarkoh/datamaps/master/src/js/data/world.json";
-                console.log("世界地図データ (Datamaps) を取得します...", WORLD_MAP_URL);
-                const response = await fetch(WORLD_MAP_URL);
-                if (!response.ok) {
-                   throw new Error(`世界地図データ取得エラー: HTTP status ${response.status}`);
-                }
-                const worldData = await response.json();
-                console.log("世界地図データ (Datamaps) を取得しました。");
+      // 4. すべてのトレースを結合 (worldMapTrace を追加)
+      // 描画順序: 球体 -> 世界地図 -> プレート境界 -> 地震データ
+      const allTraces = [
+        earthSphereTrace,
+        ...(worldMapTrace ? [worldMapTrace] : []), // 世界地図境界を地球球体の直後に描画
+        ...(plateBoundariesTrace ? [plateBoundariesTrace] : []), // プレート境界
+        ...earthquakeTraces, // 地震データを最後に描画して前面に表示
+      ];
 
-                const worldX = [];
-                const worldY = [];
-                const worldZ = [];
+      // 5. レイアウト (タイトル変更)
+      const layout = {
+        title: "地震データ 3D 球面プロット (世界地図/プレート境界)",
+        font: { color: "white" },
+        paper_bgcolor: "black", // グラフ全体の背景色
+        plot_bgcolor: "black", // プロット領域の背景色
 
-                worldData.features.forEach(feature => {
-                    // Polygon と MultiPolygon の両方を処理
-                    if (feature.geometry.type === "Polygon") {
-                        // Polygon はリングの配列 [ [ [lng, lat], ... ], [ [lng, lat], ... (穴) ] ]
-                        feature.geometry.coordinates.forEach(ring => { // 各リングを処理
-                             ring.forEach(coord => {
-                                 const lon = coord[0];
-                                 const lat = coord[1];
-                                 if (isNaN(lat) || isNaN(lon)) return;
+        scene: {
+          aspectmode: "data",
+        },
+        margin: { l: 0, r: 0, b: 0, t: 50 },
+      };
 
-                                 // 球面座標変換 (地球表面にプロット)
-                                 const adjustedRadius = EARTH_RADIUS_KM;
-                                 const phi = (90 - lat) * (Math.PI / 180);
-                                 const theta = (lon + 180) * (Math.PI / 180);
-
-                                 const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
-                                 const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
-                                 const z = adjustedRadius * Math.cos(phi);
-
-                                 worldX.push(x);
-                                 worldY.push(y);
-                                 worldZ.push(z);
-                             });
-                             // 各リングの終端に NaN を挿入
-                             worldX.push(NaN);
-                             worldY.push(NaN);
-                             worldZ.push(NaN);
-                        });
-                        // Polygon 全体の終端にも NaN を挿入 (オプション、Feature間の区切り)
-                        worldX.push(NaN);
-                        worldY.push(NaN);
-                        worldZ.push(NaN);
-                    }
-                    else if (feature.geometry.type === "MultiPolygon") {
-                         // MultiPolygon は Polygon の配列 [ [ [ [lng, lat], ... ], ... ], [ [ [lng, lat], ... ], ... ] ]
-                         feature.geometry.coordinates.forEach(polygonCoords => { // 各 Polygon を処理
-                              polygonCoords.forEach(ring => { // 各リングを処理
-                                   ring.forEach(coord => {
-                                       const lon = coord[0];
-                                       const lat = coord[1];
-                                       if (isNaN(lat) || isNaN(lon)) return;
-
-                                       const adjustedRadius = EARTH_RADIUS_KM;
-                                       const phi = (90 - lat) * (Math.PI / 180);
-                                       const theta = (lon + 180) * (Math.PI / 180);
-
-                                       const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
-                                       const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
-                                       const z = adjustedRadius * Math.cos(phi);
-
-                                       worldX.push(x);
-                                       worldY.push(y);
-                                       worldZ.push(z);
-                                   });
-                                   // 各リングの終端に NaN を挿入
-                                   worldX.push(NaN);
-                                   worldY.push(NaN);
-                                   worldZ.push(NaN);
-                              });
-                              // 各 Polygon の終端にも NaN を挿入 (オプション)
-                              worldX.push(NaN);
-                              worldY.push(NaN);
-                              worldZ.push(NaN);
-                         });
-                         // MultiPolygon 全体の終端にも NaN を挿入 (オプション)
-                         worldX.push(NaN);
-                         worldY.push(NaN);
-                         worldZ.push(NaN);
-                    }
-                    // 他の geometry type (例: Point, LineString) はここでは無視
-                });
-
-                if (worldX.length > 0) {
-                    worldMapTrace = {
-                        type: 'scatter3d',
-                        mode: 'lines', // 線で境界を描画
-                        x: worldX,
-                        y: worldY,
-                        z: worldZ,
-                        line: {
-                            color: 'white', // 色を指定 (例: 白)
-                            width: 3.8       // 線の太さを指定 (細く)
-                        },
-                        name: '世界地図境界',
-                        hoverinfo: 'skip' // 国名などの情報はここでは非表示
-                    };
-                    console.log("世界地図 (Datamaps) トレースを作成しました。");
-                } else {
-                     console.warn("世界地図データ (Datamaps) から有効なポイントが生成されませんでした。");
-                }
-
-            } catch (error) {
-                console.error("世界地図データ (Datamaps) の取得または処理中にエラーが発生しました:", error);
-                 console.warn("世界地図データの読み込みに失敗しましたが、他の要素は表示されます。");
-            }
-            // === 新規: Datamaps World.json データの取得と処理 ここまで ===
-
-
-            // 4. すべてのトレースを結合 (worldMapTrace を追加)
-            // 描画順序: 球体 -> 世界地図 -> プレート境界 -> 地震データ
-            const allTraces = [
-                earthSphereTrace,
-                ...(worldMapTrace ? [worldMapTrace] : []), // 世界地図境界を地球球体の直後に描画
-                ...(plateBoundariesTrace ? [plateBoundariesTrace] : []), // プレート境界
-                ...earthquakeTraces // 地震データを最後に描画して前面に表示
-            ];
-
-            // 5. レイアウト (タイトル変更)
-            const layout = {
-                title: '地震データ 3D 球面プロット (世界地図/プレート境界)',
-                 font: { color: 'white' },
-                 paper_bgcolor: 'black', // グラフ全体の背景色
-                plot_bgcolor: 'black',  // プロット領域の背景色
-               
-                scene: {
-                    aspectmode: 'data',
-                },
-                margin: { l: 0, r: 0, b: 0, t: 50 }
-            };
-
-         // 6. 描画 (Plotly.react を使用して視点を維持)
-            // Plotly.newPlot(containerId, allTraces, layout); // 変更前
-            Plotly.react(containerId, allTraces, layout); // ✅ react を使用
-
+      // 6. 描画 (Plotly.react を使用して視点を維持)
+      // Plotly.newPlot(containerId, allTraces, layout); // 変更前
+      Plotly.react(containerId, allTraces, layout); // ✅ react を使用
     } catch (error) {
-        console.error("Plotly 球面グラフ描画エラー:", error);
-        document.getElementById(containerId).innerHTML = '<p>球面グラフの描画中にエラーが発生しました。</p>';
+      console.error("Plotly 球面グラフ描画エラー:", error);
+      document.getElementById(containerId).innerHTML =
+        "<p>球面グラフの描画中にエラーが発生しました。</p>";
     }
-     })(); 
+  })();
 }
+  initNotificationSettings(); 
