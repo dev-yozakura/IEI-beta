@@ -1,4 +1,4 @@
-let HypoDate = 0;
+let HypoDate = 2;
 let allData = [];
 // 統合表示用変数
 let combinedData = {
