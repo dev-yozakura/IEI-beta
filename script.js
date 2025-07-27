@@ -1,4 +1,4 @@
-let HypoDate = 2;
+let HypoDate = 0;
 let allData = [];
 // 統合表示用変数
 let combinedData = {
@@ -1620,15 +1620,23 @@ function updateCombinedDisplay() {
   combinedEqList.innerHTML = "";
   // 関数を呼び出して地図を表示
 // === 修正箇所 3 (オプション): 地図マーカーの更新条件を確認 ===
-// 関数を呼び出して地図を表示 (地図が初期化されている場合のみ)
-if (map) { // ✅ map が存在する場合のみ実行
-    console.log("updateCombinedDisplay: 地図にマーカーを表示します");
-    initMapWithMarkers(map, combinedData);
-} else {
-    console.log("updateCombinedDisplay: 地図が初期化されていないため、マーカー表示をスキップします");
-}
-// === 修正箇所 3 ここまで ===
+// 関数を呼び出して地図を表示 (地図が初期化されており、かつ tab2 がアクティブな場合のみ)
+    const isTab2Active = document.getElementById('tab2')?.classList.contains('active');
 
+    if (map && isTab2Active) { // ✅ map が存在し、かつ tab2 がアクティブな場合のみ実行
+        console.log("updateCombinedDisplay: 地図にマーカーを表示します (tab2 アクティブ)");
+        initMapWithMarkers(map, combinedData);
+    } else if (map) {
+        console.log("updateCombinedDisplay: 地図は初期化されていますが、tab2 は非アクティブです。マーカー更新をスキップします。");
+        // オプション: tab2 が非アクティブな場合でも、地図のデータ（マーカー）だけは更新しておきたい場合
+        // （ただし表示はされない）。これはパフォーマンス的に微妙な場合もあるので注意。
+        // 例えば、次に tab2 を開いたときに最新のマーカーが表示されるようにしたい場合。
+        // その場合は、以下のように条件を緩和できます:
+        // initMapWithMarkers(map, combinedData); // map があるなら更新
+    } else {
+        // map が未初期化 (tab2 がまだ開かれていないなど)
+        console.log("updateCombinedDisplay: 地図が初期化されていないため、マーカー表示をスキップします。");
+    }
   if (allData.length === 0) {
     combinedEqList.innerHTML = "<p class='no-data'>地震情報がありません</p>";
     combinedStatus.textContent = "最新更新: データがありません";
@@ -3487,6 +3495,9 @@ function updatePlotlyGraph(containerId = 'plotly-graph-2-1') {
         // 3. レイアウトの定義
         const layout = {
             title: '地震データ 3D プロット (緯度/経度/深さ)',
+            font: { color: 'white' },
+            paper_bgcolor: 'gray', // グラフ全体の背景色
+                plot_bgcolor: 'black',  // プロット領域の背景色
             scene: {
                 xaxis: { title: '経度 (Longitude)' },
                 yaxis: { title: '緯度 (Latitude)' },
@@ -3506,17 +3517,22 @@ function updatePlotlyGraph(containerId = 'plotly-graph-2-1') {
 
 // 球面 3D 散布図
 function updatePlotlySphereGraph(containerId = 'plotly-graph-2-2') {
-    try {
-         if (!Array.isArray(allData)) {
-             console.warn("球面グラフ描画: allData が配列ではありません。");
-             document.getElementById(containerId).innerHTML = '<p>表示するデータがありません (データ形式エラー)。</p>';
-             return;
-        }
-        if (allData.length === 0) {
-             console.warn("球面グラフ描画: allData が空です。");
-             document.getElementById(containerId).innerHTML = '<p>表示する地震データがありません。</p>';
-             return;
-        }
+   // 非同期関数として定義
+    (async () => {
+        try {
+            // --- allData のチェック (変更なし) ---
+            if (!Array.isArray(allData)) {
+                console.warn("球面グラフ描画: allData が配列ではありません。");
+                document.getElementById(containerId).innerHTML = '<p>表示するデータがありません (データ形式エラー)。</p>';
+                return;
+            }
+            if (allData.length === 0) {
+                console.warn("球面グラフ描画: allData が空です。");
+                document.getElementById(containerId).innerHTML = '<p>表示する地震データがありません。</p>';
+                return;
+            }
+            // --- allData のチェック ここまで ---
+
 
         // 1. データを準備
         const lats = [];
@@ -3571,7 +3587,7 @@ function updatePlotlySphereGraph(containerId = 'plotly-graph-2-2') {
                  sourceInfo.push(source);
 
                  // === 球面座標変換 ===
-                 const EARTH_RADIUS_KM = 6371;
+                 const EARTH_RADIUS_KM = 6370.137; // 地球の半径 (km)
                  const adjustedRadius = Math.max(0.1, EARTH_RADIUS_KM - depth);
 
                  const phi = (90 - lat) * (Math.PI / 180); // colatitude
@@ -3594,7 +3610,7 @@ function updatePlotlySphereGraph(containerId = 'plotly-graph-2-2') {
         }
 
         // 2. 地球球体を描画
-        const EARTH_RADIUS_KM = 6371;
+        const EARTH_RADIUS_KM = 6378.137;
         const u = Array.from({length: 50}, (_, i) => (i / 49) * 2 * Math.PI);
         const v = Array.from({length: 50}, (_, i) => (i / 49) * Math.PI);
 
@@ -3637,7 +3653,7 @@ function updatePlotlySphereGraph(containerId = 'plotly-graph-2-2') {
                 marker: {
                     size: indices.map(i => Math.max(2, (2 + magnitudes[i]) * 2)),
                     sizemode: 'diameter',
-                    opacity: 0.8
+                    opacity: 1
                 }
             };
         });
@@ -3647,32 +3663,229 @@ function updatePlotlySphereGraph(containerId = 'plotly-graph-2-2') {
             x: sphere_x,
             y: sphere_y,
             z: sphere_z,
-            opacity: 0.2,
+            opacity: 0.4,
             showscale: false,
             hoverinfo: 'skip',
             colorscale: [[0, 'lightblue'], [1, 'lightblue']],
             name: '地球'
         };
 
-        const allTraces = [earthSphereTrace, ...earthquakeTraces];
+         // === 新規: プレート境界線データの取得と処理 ===
+            let plateBoundariesTrace = null; // 初期化
+            try {
+                console.log("プレート境界データを取得します...");
+                const response = await fetch("https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json");
+                if (!response.ok) {
+                   throw new Error(`プレート境界データ取得エラー: HTTP status ${response.status}`);
+                }
+                const plateData = await response.json();
+                console.log("プレート境界データを取得しました。");
 
-        // 4. レイアウト
-        const layout = {
-            title: '地震データ 3D 球面プロット',
-            scene: {
-                aspectmode: 'data', // 球体に見せる
-                // xaxis: { visible: false },
-                // yaxis: { visible: false },
-                // zaxis: { visible: false },
-            },
-            margin: { l: 0, r: 0, b: 0, t: 50 }
-        };
+                // 境界線の座標を格納する配列
+                const plateX = [];
+                const plateY = [];
+                const plateZ = [];
 
-        // 5. 描画
-        Plotly.react(containerId, allTraces, layout);
+                // 各 Feature (境界線セグメント) を処理
+                plateData.features.forEach(feature => {
+                    if (feature.geometry.type === "LineString") {
+                        const coordinates = feature.geometry.coordinates; // [ [lng, lat], [lng, lat], ... ]
+                        coordinates.forEach(coord => {
+                             const lon = coord[0];
+                             const lat = coord[1];
+                             // NaN チェック
+                             if (isNaN(lat) || isNaN(lon)) return;
+
+                             // 球面座標変換 (深さ 0 km として地球表面にプロット)
+                             const adjustedRadius = EARTH_RADIUS_KM; // 表面にプロット
+
+                             const phi = (90 - lat) * (Math.PI / 180); // colatitude
+                             const theta = (lon + 180) * (Math.PI / 180); // longitude 0-360
+
+                             const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
+                             const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
+                             const z = adjustedRadius * Math.cos(phi);
+
+                             plateX.push(x);
+                             plateY.push(y);
+                             plateZ.push(z);
+                        });
+                        // 各 LineString の終端に NaN を挿入して、線が繋がりすぎないようにする
+                        plateX.push(NaN);
+                        plateY.push(NaN);
+                        plateZ.push(NaN);
+                    }
+                    // MultiLineString など他の geometry type にも対応可能だが、ここでは LineString のみ処理
+                });
+
+                // 境界線トレースを作成
+                if (plateX.length > 0) {
+                    plateBoundariesTrace = {
+                        type: 'scatter3d',
+                        mode: 'lines', // 線で描画
+                        x: plateX,
+                        y: plateY,
+                        z: plateZ,
+                        line: {
+                            color: 'orange', // 線の色
+                            width: 2.5       // 線の太さ
+                        },
+                        name: 'プレート境界',
+                        hoverinfo: 'skip' // ホバー情報を非表示
+                    };
+                    console.log("プレート境界線トレースを作成しました。");
+                } else {
+                     console.warn("プレート境界線データから有効なポイントが生成されませんでした。");
+                }
+
+            } catch (error) {
+                console.error("プレート境界データの取得または処理中にエラーが発生しました:", error);
+                // エラーが発生してもグラフの描画は継続
+            }
+           // === 新規: Datamaps World.json データの取得と処理 ===
+            let worldMapTrace = null;
+            try {
+                // ✅ 修正: Datamaps の world.json を使用
+                const WORLD_MAP_URL = "https://raw.githubusercontent.com/markmarkoh/datamaps/master/src/js/data/world.json";
+                console.log("世界地図データ (Datamaps) を取得します...", WORLD_MAP_URL);
+                const response = await fetch(WORLD_MAP_URL);
+                if (!response.ok) {
+                   throw new Error(`世界地図データ取得エラー: HTTP status ${response.status}`);
+                }
+                const worldData = await response.json();
+                console.log("世界地図データ (Datamaps) を取得しました。");
+
+                const worldX = [];
+                const worldY = [];
+                const worldZ = [];
+
+                worldData.features.forEach(feature => {
+                    // Polygon と MultiPolygon の両方を処理
+                    if (feature.geometry.type === "Polygon") {
+                        // Polygon はリングの配列 [ [ [lng, lat], ... ], [ [lng, lat], ... (穴) ] ]
+                        feature.geometry.coordinates.forEach(ring => { // 各リングを処理
+                             ring.forEach(coord => {
+                                 const lon = coord[0];
+                                 const lat = coord[1];
+                                 if (isNaN(lat) || isNaN(lon)) return;
+
+                                 // 球面座標変換 (地球表面にプロット)
+                                 const adjustedRadius = EARTH_RADIUS_KM;
+                                 const phi = (90 - lat) * (Math.PI / 180);
+                                 const theta = (lon + 180) * (Math.PI / 180);
+
+                                 const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
+                                 const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
+                                 const z = adjustedRadius * Math.cos(phi);
+
+                                 worldX.push(x);
+                                 worldY.push(y);
+                                 worldZ.push(z);
+                             });
+                             // 各リングの終端に NaN を挿入
+                             worldX.push(NaN);
+                             worldY.push(NaN);
+                             worldZ.push(NaN);
+                        });
+                        // Polygon 全体の終端にも NaN を挿入 (オプション、Feature間の区切り)
+                        worldX.push(NaN);
+                        worldY.push(NaN);
+                        worldZ.push(NaN);
+                    }
+                    else if (feature.geometry.type === "MultiPolygon") {
+                         // MultiPolygon は Polygon の配列 [ [ [ [lng, lat], ... ], ... ], [ [ [lng, lat], ... ], ... ] ]
+                         feature.geometry.coordinates.forEach(polygonCoords => { // 各 Polygon を処理
+                              polygonCoords.forEach(ring => { // 各リングを処理
+                                   ring.forEach(coord => {
+                                       const lon = coord[0];
+                                       const lat = coord[1];
+                                       if (isNaN(lat) || isNaN(lon)) return;
+
+                                       const adjustedRadius = EARTH_RADIUS_KM;
+                                       const phi = (90 - lat) * (Math.PI / 180);
+                                       const theta = (lon + 180) * (Math.PI / 180);
+
+                                       const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
+                                       const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
+                                       const z = adjustedRadius * Math.cos(phi);
+
+                                       worldX.push(x);
+                                       worldY.push(y);
+                                       worldZ.push(z);
+                                   });
+                                   // 各リングの終端に NaN を挿入
+                                   worldX.push(NaN);
+                                   worldY.push(NaN);
+                                   worldZ.push(NaN);
+                              });
+                              // 各 Polygon の終端にも NaN を挿入 (オプション)
+                              worldX.push(NaN);
+                              worldY.push(NaN);
+                              worldZ.push(NaN);
+                         });
+                         // MultiPolygon 全体の終端にも NaN を挿入 (オプション)
+                         worldX.push(NaN);
+                         worldY.push(NaN);
+                         worldZ.push(NaN);
+                    }
+                    // 他の geometry type (例: Point, LineString) はここでは無視
+                });
+
+                if (worldX.length > 0) {
+                    worldMapTrace = {
+                        type: 'scatter3d',
+                        mode: 'lines', // 線で境界を描画
+                        x: worldX,
+                        y: worldY,
+                        z: worldZ,
+                        line: {
+                            color: 'white', // 色を指定 (例: 白)
+                            width: 3.8       // 線の太さを指定 (細く)
+                        },
+                        name: '世界地図境界',
+                        hoverinfo: 'skip' // 国名などの情報はここでは非表示
+                    };
+                    console.log("世界地図 (Datamaps) トレースを作成しました。");
+                } else {
+                     console.warn("世界地図データ (Datamaps) から有効なポイントが生成されませんでした。");
+                }
+
+            } catch (error) {
+                console.error("世界地図データ (Datamaps) の取得または処理中にエラーが発生しました:", error);
+                 console.warn("世界地図データの読み込みに失敗しましたが、他の要素は表示されます。");
+            }
+            // === 新規: Datamaps World.json データの取得と処理 ここまで ===
+
+
+            // 4. すべてのトレースを結合 (worldMapTrace を追加)
+            // 描画順序: 球体 -> 世界地図 -> プレート境界 -> 地震データ
+            const allTraces = [
+                earthSphereTrace,
+                ...(worldMapTrace ? [worldMapTrace] : []), // 世界地図境界を地球球体の直後に描画
+                ...(plateBoundariesTrace ? [plateBoundariesTrace] : []), // プレート境界
+                ...earthquakeTraces // 地震データを最後に描画して前面に表示
+            ];
+
+            // 5. レイアウト (タイトル変更)
+            const layout = {
+                title: '地震データ 3D 球面プロット (世界地図/プレート境界)',
+                 font: { color: 'white' },
+                 paper_bgcolor: 'black', // グラフ全体の背景色
+                plot_bgcolor: 'black',  // プロット領域の背景色
+               
+                scene: {
+                    aspectmode: 'data',
+                },
+                margin: { l: 0, r: 0, b: 0, t: 50 }
+            };
+
+         // 6. 描画 (Plotly.react を使用して視点を維持)
+            // Plotly.newPlot(containerId, allTraces, layout); // 変更前
+            Plotly.react(containerId, allTraces, layout); // ✅ react を使用
 
     } catch (error) {
         console.error("Plotly 球面グラフ描画エラー:", error);
         document.getElementById(containerId).innerHTML = '<p>球面グラフの描画中にエラーが発生しました。</p>';
     }
+     })(); 
 }
