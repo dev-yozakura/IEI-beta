@@ -1,5 +1,5 @@
 let HypoDate = 0;
-
+let allData = [];
 // 統合表示用変数
 let combinedData = {
   jmaEew: null,
@@ -1440,7 +1440,7 @@ function updateCombinedDisplay() {
   const sortDirection = document.getElementById("sortDirection").value;
 
   // すべてのデータを統合
-  const allData = [];
+  allData.length = 0;
 
   // 新規データ検知
   checkNewEarthquake(allData);
@@ -1630,6 +1630,14 @@ function updateCombinedDisplay() {
   // アイテム数を表示
   countElement.textContent = allData.length;
 
+    const activeTabId = document.querySelector('.tab-content.active')?.id;
+    if (activeTabId === 'tab2.1') {
+        console.log("データ更新: tab2.1 がアクティブのためグラフを更新します");
+        updatePlotlyGraph('plotly-graph-2-1'); // ✅ 関数名とIDを一致させる
+    } else if (activeTabId === 'tab2.2') {
+        console.log("データ更新: tab2.2 がアクティブのため球面グラフを更新します");
+        updatePlotlySphereGraph('plotly-graph-2-2'); // ✅ 関数名とIDを一致させる
+    }
   // 各項目を表示
   allData.forEach((item, index) => {
     const container = document.createElement("div");
@@ -1888,6 +1896,8 @@ function updateCombinedDisplay() {
   );
 
   combinedStatus.textContent = `最新更新: ${formatTimeAgo(latestTime)}`;
+
+
 }
 // 時刻差フォーマット
 function formatTimeAgo(time) {
@@ -3011,7 +3021,7 @@ document.addEventListener("DOMContentLoaded", function () {
     "sourceCENC",
     "sourceBMKG",
     "sourceBMKG_M5",
-    "sourceJmaXml",
+    //"sourceJmaXml",
     "sourceJmaHypo",
     "sourceUSGS",
     "sourceCWA",
@@ -3080,14 +3090,27 @@ document.addEventListener("DOMContentLoaded", function () {
         updateIndicator();
 
         // 修正箇所 5: タブ切り替え時に地図サイズを再計算
-        if (map) {
-          console.log("タブ切り替え: 地図サイズを再計算します");
-          // タブ切り替えアニメーションの後に実行するため、少し遅延させる
-          setTimeout(() => {
-            map.invalidateSize();
-            console.log("タブ切り替え: 地図サイズ再計算完了");
-          }, 100); // 100msの遅延
-        }
+         // 修正箇所 5: タブ切り替え時に地図サイズを再計算
+                if (map && button.dataset.tab === 'tab2') { // 地図タブの場合
+                    console.log("タブ切り替え: 地図サイズを再計算します");
+                    setTimeout(() => {
+                        map.invalidateSize();
+                        console.log("タブ切り替え: 地図サイズ再計算完了");
+                    }, 100);
+                }
+                // === 修正箇所 6: タブ切り替え時にグラフを描画 (ID 修正) ===
+                // tab2.1 がアクティブになったときにグラフを描画
+                if (button.dataset.tab === 'tab2.1') {
+                    console.log("tab2.1 がアクティブ: グラフを描画します");
+                    // updateCombinedDisplay で最新の allData が準備されている前提
+                    // タブ切り替え時にも描画を試みるが、データがない場合は関数内で処理
+                    updatePlotlyGraph('plotly-graph-2-1'); // ✅ 関数名とIDを一致させる
+                }
+                // tab2.2 がアクティブになったときに球面グラフを描画
+                if (button.dataset.tab === 'tab2.2') {
+                    console.log("tab2.2 がアクティブ: 球面グラフを描画します");
+                    updatePlotlySphereGraph('plotly-graph-2-2'); // ✅ 関数名とIDを一致させる
+                }
       });
     });
 
@@ -3305,4 +3328,302 @@ async function fetchJmaHypoData(daysBack = 7) {
       error
     );
   }
+}
+
+// 直交座標 3D 散布図
+function updatePlotlyGraph(containerId = 'plotly-graph-2-1') {
+    try {
+        // updateCombinedDisplay 内のデータ準備ロジックを一部再利用
+        // ただし、allData はグローバル変数または updateCombinedDisplay から渡される必要があります
+        // ここでは updateCombinedDisplay が allData をグローバルに設定していると仮定します
+        // より良い方法は、allData を引数として渡すことです。
+
+        if (!Array.isArray(allData)) { // ✅ typeof 比較を簡略化
+             console.warn("グラフ描画: allData が配列ではありません。");
+             document.getElementById(containerId).innerHTML = '<p>表示するデータがありません (データ形式エラー)。</p>';
+             return;
+        }
+        if (allData.length === 0) { // ✅ データが空の場合もチェック
+             console.warn("グラフ描画: allData が空です。");
+             document.getElementById(containerId).innerHTML = '<p>表示する地震データがありません。</p>';
+             return;
+        }
+
+        // 1. データを準備
+        const lats = []; // 緯度
+        const lons = []; // 経度
+        const depths = []; // 深さ (km)
+        const magnitudes = []; // マグニチュード
+        const hoverTexts = []; // ホバーテキスト
+        const sourceInfo = []; // 情報源
+
+        // allData から必要な情報を抽出 (データ構造に応じて調整)
+        allData.forEach(item => {
+             let lat, lon, depth, mag, location, source;
+
+             // USGS GeoJSON 形式 (例)
+             if (item.geometry && item.properties) {
+                 lat = item.geometry.coordinates[1];
+                 lon = item.geometry.coordinates[0];
+                 depth = item.geometry.coordinates[2];
+                 mag = item.properties.mag;
+                 location = item.properties.place || "不明";
+                 source = "USGS";
+             }
+             // JMA GeoJSON 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
+             else if (item.lat !== undefined && item.lng !== undefined) {
+                 lat = parseFloat(item.lat);
+                 lon = parseFloat(item.lng);
+                 depth = parseFloat(item.depth);
+                 mag = parseFloat(item.magnitude);
+                 location = item.location || item.Title || "不明";
+                 source = item.source || "不明";
+             }
+             // EMSC 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
+             else if (item.type === "Feature" && item.geometry && item.properties) {
+                  const coords = item.geometry.coordinates;
+                  if (coords && coords.length >= 3) {
+                       lon = parseFloat(coords[0]);
+                       lat = parseFloat(coords[1]);
+                       depth = parseFloat(coords[2]);
+                       mag = parseFloat(item.properties.mag);
+                       location = item.properties.place || item.properties.flynn_region || "不明";
+                       source = "EMSC";
+                  }
+             }
+             // 他の形式 (例: CENC, BMKG, CWA 等) もここに追加
+             // ... (他の条件分岐) ...
+
+             // 必須データが存在し、数値に変換可能な場合のみ追加
+             if (!isNaN(lat) && !isNaN(lon) && !isNaN(depth) && !isNaN(mag)) {
+                 lats.push(lat);
+                 lons.push(lon);
+                 depths.push(-depth); // Plotly では深さを負の値で表現するのが一般的 (奥がマイナス)
+                 magnitudes.push(mag);
+                 hoverTexts.push(`場所: ${location}<br>緯度: ${lat.toFixed(4)}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(1)} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`);
+                 sourceInfo.push(source); // 情報源を分類に使用
+             }
+        });
+
+        if (lats.length === 0) {
+             console.warn("グラフ描画: 有効な地震データがありません。");
+             document.getElementById(containerId).innerHTML = '<p>有効な地震データがありません。</p>';
+             return;
+        }
+
+        // 2. データトレースの定義
+        const uniqueSources = [...new Set(sourceInfo)];
+        const traces = uniqueSources.map(src => {
+            const indices = sourceInfo.map((s, i) => s === src ? i : null).filter(i => i !== null);
+            return {
+                type: 'scatter3d',
+                mode: 'markers',
+                x: indices.map(i => lons[i]), // X軸: 経度
+                y: indices.map(i => lats[i]), // Y軸: 緯度
+                z: indices.map(i => depths[i]), // Z軸: 深さ (負の値)
+                name: src, // 凡例に表示される名前
+                text: indices.map(i => hoverTexts[i]), // ホバーテキスト
+                hoverinfo: 'text',
+                marker: {
+                    size: indices.map(i => Math.max(2, magnitudes[i] * 2)), // 最小サイズを設定
+                    sizemode: 'diameter',
+                    // color: indices.map(i => depths[i]), // 色を深さに応じて変える場合
+                    // colorscale: 'Viridis',
+                    // colorbar: { title: 'Depth (km)' },
+                    opacity: 0.7
+                }
+            };
+        });
+
+        // 3. レイアウトの定義
+        const layout = {
+            title: '地震データ 3D プロット (緯度/経度/深さ)',
+            scene: {
+                xaxis: { title: '経度 (Longitude)' },
+                yaxis: { title: '緯度 (Latitude)' },
+                zaxis: { title: '深さ (Depth km)' }
+            },
+            margin: { l: 0, r: 0, b: 0, t: 50 }
+        };
+
+        // 4. グラフを描画
+        Plotly.react(containerId, traces, layout);
+
+    } catch (error) {
+        console.error("Plotly グラフ描画エラー:", error);
+        document.getElementById(containerId).innerHTML = '<p>グラフの描画中にエラーが発生しました。</p>';
+    }
+}
+
+// 球面 3D 散布図
+function updatePlotlySphereGraph(containerId = 'plotly-graph-2-2') {
+    try {
+         if (!Array.isArray(allData)) {
+             console.warn("球面グラフ描画: allData が配列ではありません。");
+             document.getElementById(containerId).innerHTML = '<p>表示するデータがありません (データ形式エラー)。</p>';
+             return;
+        }
+        if (allData.length === 0) {
+             console.warn("球面グラフ描画: allData が空です。");
+             document.getElementById(containerId).innerHTML = '<p>表示する地震データがありません。</p>';
+             return;
+        }
+
+        // 1. データを準備
+        const lats = [];
+        const lons = [];
+        const depths = []; // km
+        const magnitudes = [];
+        const hoverTexts = [];
+        const sourceInfo = [];
+
+        const x_coords = [];
+        const y_coords = [];
+        const z_coords = [];
+
+        allData.forEach(item => {
+             let lat, lon, depth, mag, location, source;
+
+             if (item.geometry && item.properties) { // USGS
+                 lat = parseFloat(item.geometry.coordinates[1]);
+                 lon = parseFloat(item.geometry.coordinates[0]);
+                 depth = parseFloat(item.geometry.coordinates[2]);
+                 mag = parseFloat(item.properties.mag);
+                 location = item.properties.place || "不明";
+                 source = "USGS";
+             }
+             else if (item.lat !== undefined && item.lng !== undefined) { // JMA
+                 lat = parseFloat(item.lat);
+                 lon = parseFloat(item.lng);
+                 depth = parseFloat(item.depth);
+                 mag = parseFloat(item.magnitude);
+                 location = item.location || item.Title || "不明";
+                 source = item.source || "不明";
+             }
+             else if (item.type === "Feature" && item.geometry && item.properties) { // EMSC
+                  const coords = item.geometry.coordinates;
+                  if (coords && coords.length >= 3) {
+                       lon = parseFloat(coords[0]);
+                       lat = parseFloat(coords[1]);
+                       depth = parseFloat(coords[2]);
+                       mag = parseFloat(item.properties.mag);
+                       location = item.properties.place || item.properties.flynn_region || "不明";
+                       source = "EMSC";
+                  }
+             }
+             // ... 他の形式 ...
+
+             if (!isNaN(lat) && !isNaN(lon) && !isNaN(depth) && !isNaN(mag)) {
+                 lats.push(lat);
+                 lons.push(lon);
+                 depths.push(depth);
+                 magnitudes.push(mag);
+                 hoverTexts.push(`場所: ${location}<br>緯度: ${lat.toFixed(4)}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(1)} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`);
+                 sourceInfo.push(source);
+
+                 // === 球面座標変換 ===
+                 const EARTH_RADIUS_KM = 6371;
+                 const adjustedRadius = Math.max(0.1, EARTH_RADIUS_KM - depth);
+
+                 const phi = (90 - lat) * (Math.PI / 180); // colatitude
+                 const theta = (lon + 180) * (Math.PI / 180); // longitude 0-360
+
+                 const x = adjustedRadius * Math.sin(phi) * Math.cos(theta);
+                 const y = adjustedRadius * Math.sin(phi) * Math.sin(theta);
+                 const z = adjustedRadius * Math.cos(phi);
+
+                 x_coords.push(x);
+                 y_coords.push(y);
+                 z_coords.push(z);
+             }
+        });
+
+        if (x_coords.length === 0) {
+             console.warn("球面グラフ描画: 有効な地震データがありません。");
+             document.getElementById(containerId).innerHTML = '<p>有効な地震データがありません。</p>';
+             return;
+        }
+
+        // 2. 地球球体を描画
+        const EARTH_RADIUS_KM = 6371;
+        const u = Array.from({length: 50}, (_, i) => (i / 49) * 2 * Math.PI);
+        const v = Array.from({length: 50}, (_, i) => (i / 49) * Math.PI);
+
+        const sphere_x = [];
+        const sphere_y = [];
+        const sphere_z = [];
+
+        for (let i = 0; i < v.length; i++) {
+            const row_x = [];
+            const row_y = [];
+            const row_z = [];
+            for (let j = 0; j < u.length; j++) {
+                const phi = v[i];
+                const theta = u[j];
+                const x = EARTH_RADIUS_KM * Math.sin(phi) * Math.cos(theta);
+                const y = EARTH_RADIUS_KM * Math.sin(phi) * Math.sin(theta);
+                const z = EARTH_RADIUS_KM * Math.cos(phi);
+                row_x.push(x);
+                row_y.push(y);
+                row_z.push(z);
+            }
+            sphere_x.push(row_x);
+            sphere_y.push(row_y);
+            sphere_z.push(row_z);
+        }
+
+        // 3. トレース定義
+        const uniqueSources = [...new Set(sourceInfo)];
+        const earthquakeTraces = uniqueSources.map(src => {
+            const indices = sourceInfo.map((s, i) => s === src ? i : null).filter(i => i !== null);
+            return {
+                type: 'scatter3d',
+                mode: 'markers',
+                x: indices.map(i => x_coords[i]),
+                y: indices.map(i => y_coords[i]),
+                z: indices.map(i => z_coords[i]),
+                name: src,
+                text: indices.map(i => hoverTexts[i]),
+                hoverinfo: 'text',
+                marker: {
+                    size: indices.map(i => Math.max(2, magnitudes[i] * 1.5)),
+                    sizemode: 'diameter',
+                    opacity: 0.8
+                }
+            };
+        });
+
+        const earthSphereTrace = {
+            type: 'surface',
+            x: sphere_x,
+            y: sphere_y,
+            z: sphere_z,
+            opacity: 0.2,
+            showscale: false,
+            hoverinfo: 'skip',
+            colorscale: [[0, 'lightblue'], [1, 'lightblue']],
+            name: '地球'
+        };
+
+        const allTraces = [earthSphereTrace, ...earthquakeTraces];
+
+        // 4. レイアウト
+        const layout = {
+            title: '地震データ 3D 球面プロット',
+            scene: {
+                aspectmode: 'data', // 球体に見せる
+                // xaxis: { visible: false },
+                // yaxis: { visible: false },
+                // zaxis: { visible: false },
+            },
+            margin: { l: 0, r: 0, b: 0, t: 50 }
+        };
+
+        // 5. 描画
+        Plotly.react(containerId, allTraces, layout);
+
+    } catch (error) {
+        console.error("Plotly 球面グラフ描画エラー:", error);
+        document.getElementById(containerId).innerHTML = '<p>球面グラフの描画中にエラーが発生しました。</p>';
+    }
 }
