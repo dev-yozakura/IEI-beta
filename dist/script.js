@@ -1,4 +1,4 @@
-let HypoDate = 0;
+let HypoDate = 5;
 let allData = [];
 // 統合表示用変数
 let combinedData = {
@@ -3571,6 +3571,7 @@ async function fetchJmaHypoData(daysBack = 7) {
 
 // 直交座標 3D 散布図
 function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
+   (async () => {
   try {
     // updateCombinedDisplay 内のデータ準備ロジックを一部再利用
     // ただし、allData はグローバル変数または updateCombinedDisplay から渡される必要があります
@@ -3661,10 +3662,89 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
         "<p>有効な地震データがありません。</p>";
       return;
     }
+    // === 新規: Datamaps World.json データの取得と処理 (直交3D用) ===
+    let worldMapTraceOrtho = null; // 直交3D用の世界地図トレース変数
+    try {
+        // ✅ 球面3Dと同じ geo.json ファイルを使用
+        const WORLD_MAP_URL = "custom.geomedium.json";
+        console.log("世界地図データ (Datamaps/直交3D) を取得します...", WORLD_MAP_URL);
+        const response = await fetch(WORLD_MAP_URL);
+        if (!response.ok) {
+            throw new Error(`世界地図データ取得エラー: HTTP status ${response.status}`);
+        }
+        const worldData = await response.json();
+        console.log("世界地図データ (Datamaps/直交3D) を取得しました。");
 
+        const worldLons = []; // 経度
+        const worldLats = []; // 緯度
+        const worldDepth = []; // 深度 (直交プロットでは通常 0 に固定するか、特定の深度レベルに置く)
+
+        // 固定の Z (深さ) 値を設定 (例: 0 km, -100 km など)
+        // 地表に近い深さ (例えば -50 km) に置くと見やすいかもしれません。
+        const FIXED_WORLD_DEPTH = 0; // km (負の値で地表下を意味する場合が多いです)
+
+        worldData.features.forEach((feature) => {
+            // Polygon と MultiPolygon の両方を処理
+            let coordinatesList = [];
+            if (feature.geometry.type === "Polygon") {
+                coordinatesList = feature.geometry.coordinates; // [ [ [lng, lat], ... ], ... ]
+            } else if (feature.geometry.type === "MultiPolygon") {
+                // MultiPolygon は Polygon の配列 [ [ [ [lng, lat], ... ], ... ], ... ]
+                // すべての Polygon をフラット化して処理
+                feature.geometry.coordinates.forEach(polygon => coordinatesList.push(...polygon));
+            }
+            // 他の geometry type (Point, LineString) は無視
+
+            coordinatesList.forEach((ring) => {
+                // 各リングを処理
+                ring.forEach((coord) => {
+                    const lon = coord[0];
+                    const lat = coord[1];
+                    if (isNaN(lat) || isNaN(lon)) return;
+                    worldLons.push(lon);
+                    worldLats.push(lat);
+                    worldDepth.push(FIXED_WORLD_DEPTH); // 固定深さ
+                });
+                // 各リングの終端に NaN を挿入 (線が繋がりすぎないようにする)
+                worldLons.push(NaN);
+                worldLats.push(NaN);
+                worldDepth.push(NaN);
+            });
+            // Feature 間の区切りにも NaN を挿入 (オプション)
+            worldLons.push(NaN);
+            worldLats.push(NaN);
+            worldDepth.push(NaN);
+        });
+
+        if (worldLons.length > 0) {
+            worldMapTraceOrtho = {
+                type: "scatter3d",
+                mode: "lines", // 線で境界を描画
+                x: worldLons, // X軸: 経度
+                y: worldLats, // Y軸: 緯度
+                z: worldDepth, // Z軸: 固定深さ
+                line: {
+                    color: "lightblue", // 色を指定 (球面版と区別するために変更)
+                    width: 2.5, // 線の太さを指定 (細く)
+                },
+                name: "世界地図境界 (直交)",
+                hoverinfo: "skip", // ホバー情報を非表示
+            };
+            console.log("世界地図 (Datamaps/直交3D) トレースを作成しました。");
+        } else {
+            console.warn("世界地図データ (Datamaps/直交3D) から有効なポイントが生成されませんでした。");
+        }
+    } catch (error) {
+        console.error("世界地図データ (Datamaps/直交3D) の取得または処理中にエラーが発生しました:", error);
+        console.warn("世界地図データ (直交3D) の読み込みに失敗しましたが、他の要素は表示されます。");
+    }
+    // === 新規: Datamaps World.json データの取得と処理 (直交3D用) ここまで ===
     // 2. データトレースの定義
     const uniqueSources = [...new Set(sourceInfo)];
-    const traces = uniqueSources.map((src) => {
+     // worldMapTraceOrtho を最初に追加し、その後に地震データトレースを追加
+    const traces = [
+        ...(worldMapTraceOrtho ? [worldMapTraceOrtho] : []), // 世界地図境界を最初に描画
+        ...uniqueSources.map((src) => {
       const indices = sourceInfo
         .map((s, i) => (s === src ? i : null))
         .filter((i) => i !== null);
@@ -3686,7 +3766,8 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
           opacity: 0.7,
         },
       };
-    });
+    }),
+    ];
 
     // 3. レイアウトの定義
     const layout = {
@@ -3695,7 +3776,9 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
       paper_bgcolor: "black", // グラフ全体の背景色
       plot_bgcolor: "white", // プロット領域の背景色
       scene: {
-        aspectmode: "cube", // アスペクト比を立方体に設定
+        aspectmode: "manual", // <--- 手動でアスペクト比を設定
+            aspectratio: { x: 16, y: 9, z: 2 }, // <--- 例: X軸をY軸、Z軸の2倍の長さにする
+           
         xaxis: { title: "経度 (Longitude)" },
         yaxis: { title: "緯度 (Latitude)" },
         zaxis: { title: "深さ (Depth km)" },
@@ -3711,7 +3794,8 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
       "<p>グラフの描画中にエラーが発生しました。</p>";
   }
 }
-
+)();
+}
 // 球面 3D 散布図
 function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
   // 非同期関数として定義
@@ -3744,26 +3828,31 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
       const y_coords = [];
       const z_coords = [];
 
-       // --- 地球内部境界の定義 (追加開始) ---
-    const EARTH_RADIUS_KM = 6371; // 平均地球半径を使用
-    // 表示したい内部境界を定義 (深度km, 表示名, 色)
-    const DISCONTINUITIES = [
+      // --- 地球内部境界の定義 (追加開始) ---
+      const EARTH_RADIUS_KM = 6371; // 平均地球半径を使用
+      // 表示したい内部境界を定義 (深度km, 表示名, 色)
+      const DISCONTINUITIES = [
         // { name: "地表", depth: 0, color: "blue", opacity: 0.1 }, // 地表は既存のearthSphereTraceで描画
-       // { name: "核・マントル境界 (CMB)", depth: 2891, color: "green", opacity: 0.6 },
-        { name: "660 km 不連続面", depth: 660, color: "darkblue", opacity: 0.8 },
+        // { name: "核・マントル境界 (CMB)", depth: 2891, color: "green", opacity: 0.6 },
+        {
+          name: "660 km 不連続面",
+          depth: 660,
+          color: "darkblue",
+          opacity: 0.8,
+        },
         //{ name: "410 km 不連続面", depth: 410, color: "yellow", opacity: 0.2 },
-        
+
         // 必要に応じて他の境界を追加
         // { name: "岩石圏底", depth: 100, color: "green", opacity: 0.15 },
         // { name: "外核・内核境界 (ICB)", depth: 5150, color: "purple", opacity: 0.25 },
-    ];
+      ];
 
-    // 半径に変換 (中心からの距離)
-    const internalSpheres = DISCONTINUITIES.map(d => ({
+      // 半径に変換 (中心からの距離)
+      const internalSpheres = DISCONTINUITIES.map((d) => ({
         ...d,
-        radius: EARTH_RADIUS_KM - d.depth
-    }));
-    // --- 地球内部境界の定義 (追加終了) ---
+        radius: EARTH_RADIUS_KM - d.depth,
+      }));
+      // --- 地球内部境界の定義 (追加終了) ---
 
       allData.forEach((item) => {
         let lat, lon, depth, mag, location, source;
@@ -3819,7 +3908,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
 
           // === 球面座標変換 ===
           const EARTH_RADIUS_KM = 6370.137; // 地球の半径 (km)
-          
+
           const adjustedRadius = Math.max(0.1, EARTH_RADIUS_KM - depth);
 
           const phi = (90 - lat) * (Math.PI / 180); // colatitude
@@ -3841,11 +3930,11 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
           "<p>有効な地震データがありません。</p>";
         return;
       }
- // --- 内部境界球面の生成とトレース作成 (追加開始) ---
-    const internalSphereTraces = [];
+      // --- 内部境界球面の生成とトレース作成 (追加開始) ---
+      const internalSphereTraces = [];
 
-    // 各内部境界に対して球面データを生成し、トレースを作成
-    internalSpheres.forEach(internalSphere => {
+      // 各内部境界に対して球面データを生成し、トレースを作成
+      internalSpheres.forEach((internalSphere) => {
         const { radius, name, color, opacity } = internalSphere;
         const sphere_x = [];
         const sphere_y = [];
@@ -3856,44 +3945,45 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
         const v = Array.from({ length: 30 }, (_, i) => (i / 29) * Math.PI);
 
         for (let i = 0; i < u.length; i++) {
-            const theta = u[i]; // 経度 (0 to 2π)
-            const row_x = [];
-            const row_y = [];
-            const row_z = [];
-            for (let j = 0; j < v.length; j++) {
-                const phi = v[j]; // 余緯 (0 to π)
-                const x = radius * Math.sin(phi) * Math.cos(theta);
-                const y = radius * Math.sin(phi) * Math.sin(theta);
-                const z = radius * Math.cos(phi);
-                row_x.push(x);
-                row_y.push(y);
-                row_z.push(z);
-            }
-            sphere_x.push(row_x);
-            sphere_y.push(row_y);
-            sphere_z.push(row_z);
+          const theta = u[i]; // 経度 (0 to 2π)
+          const row_x = [];
+          const row_y = [];
+          const row_z = [];
+          for (let j = 0; j < v.length; j++) {
+            const phi = v[j]; // 余緯 (0 to π)
+            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const y = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.cos(phi);
+            row_x.push(x);
+            row_y.push(y);
+            row_z.push(z);
+          }
+          sphere_x.push(row_x);
+          sphere_y.push(row_y);
+          sphere_z.push(row_z);
         }
 
         // 内部境界球面のトレース定義
         internalSphereTraces.push({
-            type: "surface",
-            x: sphere_x,
-            y: sphere_y,
-            z: sphere_z,
-            name: name,
-            opacity: opacity,
-            showscale: false,
-            hoverinfo: "name", // ホバーで名前を表示
-            colorscale: [[0, color], [1, color]], // 単色
-            showsurface: true,
-            surfacecolor: sphere_z.map(row => row.map(() => 0)), // 単色表示のためのダミーデータ
+          type: "surface",
+          x: sphere_x,
+          y: sphere_y,
+          z: sphere_z,
+          name: name,
+          opacity: opacity,
+          showscale: false,
+          hoverinfo: "name", // ホバーで名前を表示
+          colorscale: [
+            [0, color],
+            [1, color],
+          ], // 単色
+          showsurface: true,
+          surfacecolor: sphere_z.map((row) => row.map(() => 0)), // 単色表示のためのダミーデータ
         });
-    });
-    // --- 内部境界球面の生成とトレース作成 (追加終了) ---
+      });
+      // --- 内部境界球面の生成とトレース作成 (追加終了) ---
       // 2. 地球球体を描画
-    
 
-      
       const u = Array.from({ length: 50 }, (_, i) => (i / 49) * 2 * Math.PI);
       const v = Array.from({ length: 50 }, (_, i) => (i / 49) * Math.PI);
 
@@ -4042,8 +4132,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
       let worldMapTrace = null;
       try {
         // ✅ 修正: Datamaps の world.json を使用
-        const WORLD_MAP_URL =
-          "custom.geomedium.json";
+        const WORLD_MAP_URL = "custom.geomedium.json";
         console.log("世界地図データ (Datamaps) を取得します...", WORLD_MAP_URL);
         const response = await fetch(WORLD_MAP_URL);
         if (!response.ok) {
@@ -4141,7 +4230,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
             z: worldZ,
             line: {
               color: "white", // 色を指定 (例: 白)
-              width: 3.8, // 線の太さを指定 (細く)
+              width: 4.8, // 線の太さを指定 (細く)
             },
             name: "世界地図境界",
             hoverinfo: "skip", // 国名などの情報はここでは非表示
@@ -4165,13 +4254,13 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
 
       // 4. すべてのトレースを結合 (worldMapTrace を追加)
       // 描画順序: 球体 -> 世界地図 -> プレート境界 -> 地震データ
-          const allTraces = [
+      const allTraces = [
         ...internalSphereTraces, // 内部境界 (中心に近い順に定義されている想定)
-               // 地表
+        // 地表
         ...(worldMapTrace ? [worldMapTrace] : []),
         ...(plateBoundariesTrace ? [plateBoundariesTrace] : []),
-        ...earthquakeTraces,     // 地震データ
-    ];
+        ...earthquakeTraces, // 地震データ
+      ];
 
       // 5. レイアウト (タイトル変更)
       const layout = {
