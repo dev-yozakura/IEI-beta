@@ -51,7 +51,7 @@ const NOTIFICATION_LEVELS = {
 // --- 通知関連のグローバル変数 (既存の変数を置き換えまたは追加) ---
  let enableNotification = true; // 既存
  let soundNotification = false; // 既存
- let magThreshold = 4.0; // 既存
+ let magThreshold = 1.0; // 既存
 let lastNotificationId = null; // 既存、通知重複防止用
 let processedIds = new Set(); // 既存、通知済みID記録用
 
@@ -61,6 +61,29 @@ function checkNewEarthquake(dataArray) {
   if (!enableNotification) return;
 
   dataArray.forEach((item) => {
+    // ✅ 1時間以上前の地震は通知しないフィルターを追加
+        // --- 時刻フィルタリング開始 ---
+        const oneHourInMillis = 60 * 60 * 1000; // 1時間 = 3600000 ミリ秒
+        const now = new Date();
+        let earthquakeTime = null;
+
+        // item オブジェクトから時刻情報を取得 (各データソースの形式に対応)
+        // 例: time_full, time, shockTime, DateTime など
+        //const timeStr = item.time_full || item.time || item.shockTime || item.DateTime || item.origin_time || null;
+
+        if (timeStr) {
+            // 文字列を Date オブジェクトに変換
+            // 注意: 入力フォーマットによっては、より明示的なパースが必要な場合があります (例: 'YYYY-MM-DD HH:mm:ss')
+            earthquakeTime = new Date(timeStr);
+        }
+
+        // 時刻情報が取得できなかった場合、または1時間以上前であれば通知をスキップ
+        if (!earthquakeTime || isNaN(earthquakeTime.getTime()) || (now - earthquakeTime) > oneHourInMillis) {
+            console.log("通知スキップ: 1時間以上前の地震または時刻情報が無効です", item);
+            return; // この item に対する処理をスキップ
+        }
+        // --- 時刻フィルタリング終了 ---
+
     // --- ユニークなIDの生成 ---
     // 各データソースのIDフィールドを考慮して、できるだけ一意なIDを生成
     const uniqueId = item.id || item.eid || item.EventID || item.eventId || item.code || item.EventId || item.EventCode ||
@@ -128,7 +151,7 @@ function showNotification(title, body, levelSettings, itemId) {
     vibrate: levelSettings.vibrate || [200], // レベル設定にバイブがなければデフォルト
     tag: `earthquake-alert-${itemId}`, // アイテムIDでタグ付けし、同じ地震の通知が重複しないようにする
     renotify: true, // 同じタグの通知が来たら上書きして再通知
-    requireInteraction: true // ユーザーが操作するまで通知を閉じない (オプション)
+    requireInteraction: false, // ユーザーが操作するまで通知を閉じない (オプション)
   };
 
   const notification = new Notification(title, notificationOptions);
@@ -138,6 +161,12 @@ function showNotification(title, body, levelSettings, itemId) {
     window.focus();
     notification.close();
   });
+ setTimeout(() => {
+        if (notification && notification.close) {
+            notification.close();
+            console.log(`通知が自動的に閉じられました: ${title}`);
+        }
+    }, 60000); // 60000ミリ秒 = 60秒
 
   // --- 音声通知（オプション）---
   if (soundNotification && levelSettings.sound) {
