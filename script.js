@@ -166,7 +166,7 @@ function showNotification(title, body, levelSettings, itemId) {
             notification.close();
             console.log(`通知が自動的に閉じられました: ${title}`);
         }
-    }, 60000); // 60000ミリ秒 = 60秒
+    }, 6000); // 6000ミリ秒 = 6秒
 
   // --- 音声通知（オプション）---
   if (soundNotification && levelSettings.sound) {
