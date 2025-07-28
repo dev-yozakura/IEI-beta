@@ -3744,6 +3744,27 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
       const y_coords = [];
       const z_coords = [];
 
+       // --- 地球内部境界の定義 (追加開始) ---
+    const EARTH_RADIUS_KM = 6371; // 平均地球半径を使用
+    // 表示したい内部境界を定義 (深度km, 表示名, 色)
+    const DISCONTINUITIES = [
+        // { name: "地表", depth: 0, color: "blue", opacity: 0.1 }, // 地表は既存のearthSphereTraceで描画
+       // { name: "核・マントル境界 (CMB)", depth: 2891, color: "green", opacity: 0.6 },
+        { name: "660 km 不連続面", depth: 660, color: "darkblue", opacity: 0.8 },
+        //{ name: "410 km 不連続面", depth: 410, color: "yellow", opacity: 0.2 },
+        
+        // 必要に応じて他の境界を追加
+        // { name: "岩石圏底", depth: 100, color: "green", opacity: 0.15 },
+        // { name: "外核・内核境界 (ICB)", depth: 5150, color: "purple", opacity: 0.25 },
+    ];
+
+    // 半径に変換 (中心からの距離)
+    const internalSpheres = DISCONTINUITIES.map(d => ({
+        ...d,
+        radius: EARTH_RADIUS_KM - d.depth
+    }));
+    // --- 地球内部境界の定義 (追加終了) ---
+
       allData.forEach((item) => {
         let lat, lon, depth, mag, location, source;
 
@@ -3798,6 +3819,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
 
           // === 球面座標変換 ===
           const EARTH_RADIUS_KM = 6370.137; // 地球の半径 (km)
+          
           const adjustedRadius = Math.max(0.1, EARTH_RADIUS_KM - depth);
 
           const phi = (90 - lat) * (Math.PI / 180); // colatitude
@@ -3819,9 +3841,59 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
           "<p>有効な地震データがありません。</p>";
         return;
       }
+ // --- 内部境界球面の生成とトレース作成 (追加開始) ---
+    const internalSphereTraces = [];
 
+    // 各内部境界に対して球面データを生成し、トレースを作成
+    internalSpheres.forEach(internalSphere => {
+        const { radius, name, color, opacity } = internalSphere;
+        const sphere_x = [];
+        const sphere_y = [];
+        const sphere_z = [];
+
+        // 球面データ生成 (earthSphereTrace と同様のロジック)
+        const u = Array.from({ length: 30 }, (_, i) => (i / 29) * 2 * Math.PI); // 精度を若干落とす
+        const v = Array.from({ length: 30 }, (_, i) => (i / 29) * Math.PI);
+
+        for (let i = 0; i < u.length; i++) {
+            const theta = u[i]; // 経度 (0 to 2π)
+            const row_x = [];
+            const row_y = [];
+            const row_z = [];
+            for (let j = 0; j < v.length; j++) {
+                const phi = v[j]; // 余緯 (0 to π)
+                const x = radius * Math.sin(phi) * Math.cos(theta);
+                const y = radius * Math.sin(phi) * Math.sin(theta);
+                const z = radius * Math.cos(phi);
+                row_x.push(x);
+                row_y.push(y);
+                row_z.push(z);
+            }
+            sphere_x.push(row_x);
+            sphere_y.push(row_y);
+            sphere_z.push(row_z);
+        }
+
+        // 内部境界球面のトレース定義
+        internalSphereTraces.push({
+            type: "surface",
+            x: sphere_x,
+            y: sphere_y,
+            z: sphere_z,
+            name: name,
+            opacity: opacity,
+            showscale: false,
+            hoverinfo: "name", // ホバーで名前を表示
+            colorscale: [[0, color], [1, color]], // 単色
+            showsurface: true,
+            surfacecolor: sphere_z.map(row => row.map(() => 0)), // 単色表示のためのダミーデータ
+        });
+    });
+    // --- 内部境界球面の生成とトレース作成 (追加終了) ---
       // 2. 地球球体を描画
-      const EARTH_RADIUS_KM = 6378.137;
+    
+
+      
       const u = Array.from({ length: 50 }, (_, i) => (i / 49) * 2 * Math.PI);
       const v = Array.from({ length: 50 }, (_, i) => (i / 49) * Math.PI);
 
@@ -3876,7 +3948,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
         x: sphere_x,
         y: sphere_y,
         z: sphere_z,
-        opacity: 0.1,
+        opacity: 0,
         showscale: false,
         hoverinfo: "none",
         colorscale: [
@@ -3971,7 +4043,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
       try {
         // ✅ 修正: Datamaps の world.json を使用
         const WORLD_MAP_URL =
-          "custom.geo.json";
+          "custom.geomedium.json";
         console.log("世界地図データ (Datamaps) を取得します...", WORLD_MAP_URL);
         const response = await fetch(WORLD_MAP_URL);
         if (!response.ok) {
@@ -4093,12 +4165,13 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
 
       // 4. すべてのトレースを結合 (worldMapTrace を追加)
       // 描画順序: 球体 -> 世界地図 -> プレート境界 -> 地震データ
-      const allTraces = [
-        earthSphereTrace,
-        ...(worldMapTrace ? [worldMapTrace] : []), // 世界地図境界を地球球体の直後に描画
-        ...(plateBoundariesTrace ? [plateBoundariesTrace] : []), // プレート境界
-        ...earthquakeTraces, // 地震データを最後に描画して前面に表示
-      ];
+          const allTraces = [
+        ...internalSphereTraces, // 内部境界 (中心に近い順に定義されている想定)
+               // 地表
+        ...(worldMapTrace ? [worldMapTrace] : []),
+        ...(plateBoundariesTrace ? [plateBoundariesTrace] : []),
+        ...earthquakeTraces,     // 地震データ
+    ];
 
       // 5. レイアウト (タイトル変更)
       const layout = {
