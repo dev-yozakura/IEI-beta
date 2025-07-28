@@ -28,7 +28,7 @@ const NOTIFICATION_LEVELS = {
     sound: "Shindo0.mp3",
     vibrate: [100],
     icon: "favicon_low.ico",
-    label: "低"
+    label: "低",
   },
   MEDIUM: {
     minMag: 4.0,
@@ -36,7 +36,7 @@ const NOTIFICATION_LEVELS = {
     sound: "Shindo1.mp3",
     vibrate: [200, 100, 200],
     icon: "favicon_medium.ico",
-    label: "中"
+    label: "中",
   },
   HIGH: {
     minMag: 6.0,
@@ -44,14 +44,14 @@ const NOTIFICATION_LEVELS = {
     sound: "Shindo2.mp3",
     vibrate: [400, 200, 400, 200, 400],
     icon: "favicon_high.ico",
-    label: "高"
-  }
+    label: "高",
+  },
 };
 
 // --- 通知関連のグローバル変数 (既存の変数を置き換えまたは追加) ---
- let enableNotification = true; // 既存
- let soundNotification = false; // 既存
- let magThreshold = 1.0; // 既存
+let enableNotification = true; // 既存
+let soundNotification = false; // 既存
+let magThreshold = 1.0; // 既存
 let lastNotificationId = null; // 既存、通知重複防止用
 let processedIds = new Set(); // 既存、通知済みID記録用
 
@@ -62,40 +62,60 @@ function checkNewEarthquake(dataArray) {
 
   dataArray.forEach((item) => {
     // ✅ 1時間以上前の地震は通知しないフィルターを追加
-        // --- 時刻フィルタリング開始 ---
-        const oneHourInMillis = 60 * 60 * 1000; // 1時間 = 3600000 ミリ秒
-        const now = new Date();
-        let earthquakeTime = null;
+    // --- 時刻フィルタリング開始 ---
+    const oneHourInMillis = 60 * 60 * 1000; // 1時間 = 3600000 ミリ秒
+    const now = new Date();
+    let earthquakeTime = null;
 
-        // item オブジェクトから時刻情報を取得 (各データソースの形式に対応)
-        // 例: time_full, time, shockTime, DateTime など
-        //const timeStr = item.time_full || item.time || item.shockTime || item.DateTime || item.origin_time || null;
+    // item オブジェクトから時刻情報を取得 (各データソースの形式に対応)
+    // 例: time_full, time, shockTime, DateTime など
+    //const timeStr = item.time_full || item.time || item.shockTime || item.DateTime || item.origin_time || null;
 
-        if (timeStr) {
-            // 文字列を Date オブジェクトに変換
-            // 注意: 入力フォーマットによっては、より明示的なパースが必要な場合があります (例: 'YYYY-MM-DD HH:mm:ss')
-            earthquakeTime = new Date(timeStr);
-        }
+    if (timeStr) {
+      // 文字列を Date オブジェクトに変換
+      // 注意: 入力フォーマットによっては、より明示的なパースが必要な場合があります (例: 'YYYY-MM-DD HH:mm:ss')
+      earthquakeTime = new Date(timeStr);
+    }
 
-        // 時刻情報が取得できなかった場合、または1時間以上前であれば通知をスキップ
-        if (!earthquakeTime || isNaN(earthquakeTime.getTime()) || (now - earthquakeTime) > oneHourInMillis) {
-            console.log("通知スキップ: 1時間以上前の地震または時刻情報が無効です", item);
-            return; // この item に対する処理をスキップ
-        }
-        // --- 時刻フィルタリング終了 ---
+    // 時刻情報が取得できなかった場合、または1時間以上前であれば通知をスキップ
+    if (
+      !earthquakeTime ||
+      isNaN(earthquakeTime.getTime()) ||
+      now - earthquakeTime > oneHourInMillis
+    ) {
+      console.log(
+        "通知スキップ: 1時間以上前の地震または時刻情報が無効です",
+        item
+      );
+      return; // この item に対する処理をスキップ
+    }
+    // --- 時刻フィルタリング終了 ---
 
     // --- ユニークなIDの生成 ---
     // 各データソースのIDフィールドを考慮して、できるだけ一意なIDを生成
-    const uniqueId = item.id || item.eid || item.EventID || item.eventId || item.code || item.EventId || item.EventCode ||
-                     `${item.time_full || item.time || item.shockTime || item.DateTime}_${item.lat}_${item.lng}_${item.magnitude}`;
-    
+    const uniqueId =
+      item.id ||
+      item.eid ||
+      item.EventID ||
+      item.eventId ||
+      item.code ||
+      item.EventId ||
+      item.EventCode ||
+      `${item.time_full || item.time || item.shockTime || item.DateTime}_${
+        item.lat
+      }_${item.lng}_${item.magnitude}`;
+
     // 既に処理済みまたは通知済みならスキップ
     if (processedIds.has(uniqueId) || lastNotificationId === uniqueId) return;
 
     // --- マグニチュードの取得とチェック ---
     const mag = parseFloat(item.magnitude);
     if (isNaN(mag)) {
-      console.warn("checkNewEarthquake: マグニチュードが無効です", item.magnitude, item);
+      console.warn(
+        "checkNewEarthquake: マグニチュードが無効です",
+        item.magnitude,
+        item
+      );
       return; // マグニチュードが無効な場合はスキップ
     }
 
@@ -104,24 +124,31 @@ function checkNewEarthquake(dataArray) {
 
     // --- 通知レベルの判定 ---
     let notificationLevel = null;
-    for (const [levelName, levelConfig] of Object.entries(NOTIFICATION_LEVELS)) {
-        if (mag >= levelConfig.minMag && mag <= levelConfig.maxMag) {
-            notificationLevel = levelConfig;
-            break;
-        }
+    for (const [levelName, levelConfig] of Object.entries(
+      NOTIFICATION_LEVELS
+    )) {
+      if (mag >= levelConfig.minMag && mag <= levelConfig.maxMag) {
+        notificationLevel = levelConfig;
+        break;
+      }
     }
 
     // 通知レベルが見つからない場合（念のため）
     if (!notificationLevel) {
-        console.warn("checkNewEarthquake: 通知レベルが判定できませんでした。", mag, item);
-        // デフォルトでMEDIUMレベルを使用するか、スキップする
-        notificationLevel = NOTIFICATION_LEVELS.MEDIUM; 
-        // return; // スキップする場合はこちら
+      console.warn(
+        "checkNewEarthquake: 通知レベルが判定できませんでした。",
+        mag,
+        item
+      );
+      // デフォルトでMEDIUMレベルを使用するか、スキップする
+      notificationLevel = NOTIFICATION_LEVELS.MEDIUM;
+      // return; // スキップする場合はこちら
     }
 
     // --- 通知内容の作成 ---
     const title = item.Title || item.title || "新しい地震情報";
-    const timeStr = item.time_full || item.time || item.shockTime || item.DateTime || "不明";
+    const timeStr =
+      item.time_full || item.time || item.shockTime || item.DateTime || "不明";
     const locationStr = item.location || item.placeName || "不明";
     const magStr = isNaN(mag) ? "不明" : mag.toFixed(1);
     const depthStr = item.depth || item.Depth || "不明";
@@ -161,21 +188,21 @@ function showNotification(title, body, levelSettings, itemId) {
     window.focus();
     notification.close();
   });
- setTimeout(() => {
-        if (notification && notification.close) {
-            notification.close();
-            console.log(`通知が自動的に閉じられました: ${title}`);
-        }
-    }, 6000); // 6000ミリ秒 = 6秒
+  setTimeout(() => {
+    if (notification && notification.close) {
+      notification.close();
+      console.log(`通知が自動的に閉じられました: ${title}`);
+    }
+  }, 6000); // 6000ミリ秒 = 6秒
 
   // --- 音声通知（オプション）---
   if (soundNotification && levelSettings.sound) {
     // 複数の通知が同時に来た場合に音が重ならないように、既存の再生を停止するか確認
     // ここでは単純に再生を試みる
     const audio = new Audio(levelSettings.sound);
-    audio.play().catch(e => {
-        console.error("音声再生エラー:", e);
-        // iOS Safariなどではユーザー操作がないと再生できない場合がある
+    audio.play().catch((e) => {
+      console.error("音声再生エラー:", e);
+      // iOS Safariなどではユーザー操作がないと再生できない場合がある
     });
   }
 
@@ -185,8 +212,16 @@ function showNotification(title, body, levelSettings, itemId) {
     const logEntry = document.createElement("div");
     logEntry.style.margin = "5px 0";
     logEntry.style.padding = "5px";
-    logEntry.style.borderLeft = `5px solid ${levelSettings === NOTIFICATION_LEVELS.LOW ? 'green' : levelSettings === NOTIFICATION_LEVELS.MEDIUM ? 'orange' : 'red'}`;
-    logEntry.innerHTML = `<strong>[レベル: ${levelSettings.label}] ${title}</strong><br>${body.replace(/\n/g, '<br>')}`;
+    logEntry.style.borderLeft = `5px solid ${
+      levelSettings === NOTIFICATION_LEVELS.LOW
+        ? "green"
+        : levelSettings === NOTIFICATION_LEVELS.MEDIUM
+        ? "orange"
+        : "red"
+    }`;
+    logEntry.innerHTML = `<strong>[レベル: ${
+      levelSettings.label
+    }] ${title}</strong><br>${body.replace(/\n/g, "<br>")}`;
     logContainer.prepend(logEntry);
     // ログが多すぎないように制限するのも良い
     // while (logContainer.children.length > 50) { // 例: 最大50件
@@ -329,14 +364,6 @@ let iclLastUpdate = null;
 
 //emsc 地震情報用変数
 let emscLastUpdate = null;
-
-
-
-
-
-
-
-
 
 // 中央気象署（台湾）地震情報表示更新
 function updateCwaEqList(data) {
@@ -1449,8 +1476,6 @@ function updateCombinedDisplay() {
   // すべてのデータを統合
   allData.length = 0;
 
-
-
   // JMA 緊急地震速報
   if (showJMA && combinedData.jmaEew) {
     allData.push(combinedData.jmaEew);
@@ -1936,7 +1961,7 @@ function updateCombinedDisplay() {
 
   combinedStatus.textContent = `最新更新: ${formatTimeAgo(latestTime)}`;
   checkNewEarthquake(allData); // allData は updateCombinedDisplay 内で作成される統合データ配列
-showNotification(allData); // 通知を表示
+  showNotification(allData); // 通知を表示
 }
 // 時刻差フォーマット
 function formatTimeAgo(time) {
@@ -2213,7 +2238,6 @@ function connectJmaEew() {
       } else if (data.type === "jma_eew") {
         updateJmaEewDisplay(data);
       } else if (data.type === "update") {
-        ;
       }
       updateCombinedDisplay();
     } catch (error) {
@@ -2626,8 +2650,6 @@ function startAutoFetch() {
 
   alert(`${interval}秒ごとに自動取得を開始しました`);
 }
-
-
 
 // JMA XMLプルダウン要素
 const jmaXmlSelect = document.getElementById("jmaXmlSelect");
@@ -3293,143 +3315,158 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // ... 既存の他の DOMContentLoaded 内の処理 ...const magThresholdInput = document.getElementById("magThreshold");
   const magThresholdInput = document.getElementById("magThreshold");
-if (magThresholdInput) {
-  magThresholdInput.value = magThreshold; // 初期値を設定
-  magThresholdInput.addEventListener("change", () => {
-    const newThreshold = parseFloat(magThresholdInput.value);
-    if (!isNaN(newThreshold) && newThreshold >= 0) {
-      magThreshold = newThreshold;
-      // 必要に応じて設定をローカルストレージなどに保存
-    } else {
-       alert("有効な数値を入力してください。");
-       magThresholdInput.value = magThreshold; // 値を元に戻す
-    }
-  });
-}
-const enableNotificationCheckbox = document.getElementById("enableNotification");
-const soundNotificationCheckbox = document.getElementById("soundNotification");
-
-// チェックボックスの状態が変更されたときのイベントリスナーを設定
-if (enableNotificationCheckbox) {
-  enableNotificationCheckbox.addEventListener("change", () => {
-    // チェックボックスの状態をグローバル変数 enableNotification に反映
-    enableNotification = enableNotificationCheckbox.checked;
-    console.log("通知設定が変更されました:", enableNotification);
-
-    // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
-    if (enableNotification && Notification.permission !== "granted") {
-        Notification.requestPermission().then((permission) => {
-            if (permission === "granted") {
-                console.log("通知の許可が得られました。");
-            } else {
-                console.warn("通知の許可がありません。");
-                // チェックボックスの状態を再度更新してUIを同期させる
-                enableNotification = false;
-                enableNotificationCheckbox.checked = false;
-            }
-        }).catch((error) => {
-            console.error("通知許可リクエスト中にエラーが発生しました:", error);
-             enableNotification = false;
-             enableNotificationCheckbox.checked = false;
-        });
-    }
-    // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
-    // 例: updateCombinedDisplay(); // 表示を更新するなど
-  });
-}
-
-if (soundNotificationCheckbox) {
-  soundNotificationCheckbox.addEventListener("change", () => {
-    // チェックボックスの状態をグローバル変数 soundNotification に反映
-    soundNotification = soundNotificationCheckbox.checked;
-    console.log("音声通知設定が変更されました:", soundNotification);
-    // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
-  });
-}
-
-// --- ページ読み込み時の初期化 ---
-// ページ読み込み時に、チェックボックスの状態を現在の変数値と同期させます。
-// (これは、設定がローカルストレージなどから読み込まれた場合に重要です)
-document.addEventListener("DOMContentLoaded", function() {
-    if (enableNotificationCheckbox) {
-        enableNotificationCheckbox.checked = enableNotification;
-    }
-    if (soundNotificationCheckbox) {
-        soundNotificationCheckbox.checked = soundNotification;
-    }
-});
-// --- 通知設定チェックボックスの状態管理関数 ---
-function initNotificationSettings() {
-  // チェックボックス要素を取得
-  const enableNotificationCheckbox = document.getElementById("enableNotification");
-  const soundNotificationCheckbox = document.getElementById("soundNotification");
+  if (magThresholdInput) {
+    magThresholdInput.value = magThreshold; // 初期値を設定
+    magThresholdInput.addEventListener("change", () => {
+      const newThreshold = parseFloat(magThresholdInput.value);
+      if (!isNaN(newThreshold) && newThreshold >= 0) {
+        magThreshold = newThreshold;
+        // 必要に応じて設定をローカルストレージなどに保存
+      } else {
+        alert("有効な数値を入力してください。");
+        magThresholdInput.value = magThreshold; // 値を元に戻す
+      }
+    });
+  }
+  const enableNotificationCheckbox =
+    document.getElementById("enableNotification");
+  const soundNotificationCheckbox =
+    document.getElementById("soundNotification");
 
   // チェックボックスの状態が変更されたときのイベントリスナーを設定
   if (enableNotificationCheckbox) {
-    enableNotificationCheckbox.addEventListener("change", function () {
+    enableNotificationCheckbox.addEventListener("change", () => {
       // チェックボックスの状態をグローバル変数 enableNotification に反映
-      enableNotification = this.checked;
+      enableNotification = enableNotificationCheckbox.checked;
       console.log("通知設定が変更されました:", enableNotification);
 
       // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
       if (enableNotification && Notification.permission !== "granted") {
-        Notification.requestPermission().then(function(permission) {
-          if (permission === "granted") {
-            console.log("通知の許可が得られました。");
-          } else {
-            console.warn("通知の許可がありません。");
-            // チェックボックスの状態を再度更新してUIを同期させる
+        Notification.requestPermission()
+          .then((permission) => {
+            if (permission === "granted") {
+              console.log("通知の許可が得られました。");
+            } else {
+              console.warn("通知の許可がありません。");
+              // チェックボックスの状態を再度更新してUIを同期させる
+              enableNotification = false;
+              enableNotificationCheckbox.checked = false;
+            }
+          })
+          .catch((error) => {
+            console.error("通知許可リクエスト中にエラーが発生しました:", error);
             enableNotification = false;
             enableNotificationCheckbox.checked = false;
-          }
-        }).catch(function(error) {
-          console.error("通知許可リクエスト中にエラーが発生しました:", error);
-          enableNotification = false;
-          enableNotificationCheckbox.checked = false;
-        });
+          });
       }
       // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
-      // 例: updateCombinedDisplay();
+      // 例: updateCombinedDisplay(); // 表示を更新するなど
     });
-  } else {
-      console.warn("ID 'enableNotification' のチェックボックスが見つかりません。");
   }
 
   if (soundNotificationCheckbox) {
-    soundNotificationCheckbox.addEventListener("change", function () {
+    soundNotificationCheckbox.addEventListener("change", () => {
       // チェックボックスの状態をグローバル変数 soundNotification に反映
-      soundNotification = this.checked;
+      soundNotification = soundNotificationCheckbox.checked;
       console.log("音声通知設定が変更されました:", soundNotification);
       // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
     });
-  } else {
-       console.warn("ID 'soundNotification' のチェックボックスが見つかりません。");
   }
 
   // --- ページ読み込み時の初期化 ---
   // ページ読み込み時に、チェックボックスの状態を現在の変数値と同期させます。
   // (これは、設定がローカルストレージなどから読み込まれた場合に重要です)
-  // ページロード時に初期状態をUIに反映
-  if (enableNotificationCheckbox) {
+  document.addEventListener("DOMContentLoaded", function () {
+    if (enableNotificationCheckbox) {
       enableNotificationCheckbox.checked = enableNotification;
-  }
-  if (soundNotificationCheckbox) {
+    }
+    if (soundNotificationCheckbox) {
       soundNotificationCheckbox.checked = soundNotification;
+    }
+  });
+  // --- 通知設定チェックボックスの状態管理関数 ---
+  function initNotificationSettings() {
+    // チェックボックス要素を取得
+    const enableNotificationCheckbox =
+      document.getElementById("enableNotification");
+    const soundNotificationCheckbox =
+      document.getElementById("soundNotification");
+
+    // チェックボックスの状態が変更されたときのイベントリスナーを設定
+    if (enableNotificationCheckbox) {
+      enableNotificationCheckbox.addEventListener("change", function () {
+        // チェックボックスの状態をグローバル変数 enableNotification に反映
+        enableNotification = this.checked;
+        console.log("通知設定が変更されました:", enableNotification);
+
+        // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
+        if (enableNotification && Notification.permission !== "granted") {
+          Notification.requestPermission()
+            .then(function (permission) {
+              if (permission === "granted") {
+                console.log("通知の許可が得られました。");
+              } else {
+                console.warn("通知の許可がありません。");
+                // チェックボックスの状態を再度更新してUIを同期させる
+                enableNotification = false;
+                enableNotificationCheckbox.checked = false;
+              }
+            })
+            .catch(function (error) {
+              console.error(
+                "通知許可リクエスト中にエラーが発生しました:",
+                error
+              );
+              enableNotification = false;
+              enableNotificationCheckbox.checked = false;
+            });
+        }
+        // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
+        // 例: updateCombinedDisplay();
+      });
+    } else {
+      console.warn(
+        "ID 'enableNotification' のチェックボックスが見つかりません。"
+      );
+    }
+
+    if (soundNotificationCheckbox) {
+      soundNotificationCheckbox.addEventListener("change", function () {
+        // チェックボックスの状態をグローバル変数 soundNotification に反映
+        soundNotification = this.checked;
+        console.log("音声通知設定が変更されました:", soundNotification);
+        // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
+      });
+    } else {
+      console.warn(
+        "ID 'soundNotification' のチェックボックスが見つかりません。"
+      );
+    }
+
+    // --- ページ読み込み時の初期化 ---
+    // ページ読み込み時に、チェックボックスの状態を現在の変数値と同期させます。
+    // (これは、設定がローカルストレージなどから読み込まれた場合に重要です)
+    // ページロード時に初期状態をUIに反映
+    if (enableNotificationCheckbox) {
+      enableNotificationCheckbox.checked = enableNotification;
+    }
+    if (soundNotificationCheckbox) {
+      soundNotificationCheckbox.checked = soundNotification;
+    }
+    initNotificationSettings(); // 初期化関数を呼び出す
   }
-  initNotificationSettings(); // 初期化関数を呼び出す
-}
 
-// --- ページ読み込み完了時に初期化関数を実行 ---
-// この部分は、既存のDOMContentLoadedリスナー内か、スクリプトの最後に配置してください。
-// 例:
-// document.addEventListener("DOMContentLoaded", function() {
-//     // ... 他の初期化コード ...
-//     initNotificationSettings(); // この関数を呼び出す
-//     // ... 他の初期化コード ...
-// });
+  // --- ページ読み込み完了時に初期化関数を実行 ---
+  // この部分は、既存のDOMContentLoadedリスナー内か、スクリプトの最後に配置してください。
+  // 例:
+  // document.addEventListener("DOMContentLoaded", function() {
+  //     // ... 他の初期化コード ...
+  //     initNotificationSettings(); // この関数を呼び出す
+  //     // ... 他の初期化コード ...
+  // });
 
-// または、もしDOMContentLoadedリスナーが既に別に定義されている場合、
-// その中で `initNotificationSettings();` を呼び出してください。
+  // または、もしDOMContentLoadedリスナーが既に別に定義されている場合、
+  // その中で `initNotificationSettings();` を呼び出してください。
 });
 
 /**
@@ -3658,7 +3695,7 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
       paper_bgcolor: "gray", // グラフ全体の背景色
       plot_bgcolor: "black", // プロット領域の背景色
       scene: {
-         aspectmode: "cube",
+        aspectmode: "cube",
         xaxis: { title: "経度 (Longitude)" },
         yaxis: { title: "緯度 (Latitude)" },
         zaxis: { title: "深さ (Depth km)" },
@@ -4086,4 +4123,4 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
     }
   })();
 }
-  initNotificationSettings(); 
+initNotificationSettings();
