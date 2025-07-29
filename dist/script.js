@@ -1695,9 +1695,9 @@ function updateCombinedDisplay() {
     );
     initMapWithMarkers(map, combinedData);
   } else if (map) {
-    console.log(
-      "updateCombinedDisplay: 地図は初期化されていますが、tab2 は非アクティブです。マーカー更新をスキップします。"
-    );
+    //console.log(
+   //   "updateCombinedDisplay: 地図は初期化されていますが、tab2 は非アクティブです。マーカー更新をスキップします。"
+    //);
     // オプション: tab2 が非アクティブな場合でも、地図のデータ（マーカー）だけは更新しておきたい場合
     // （ただし表示はされない）。これはパフォーマンス的に微妙な場合もあるので注意。
     // 例えば、次に tab2 を開いたときに最新のマーカーが表示されるようにしたい場合。
@@ -2901,6 +2901,21 @@ startAutoFetch(); // 自動取得開始
 initialJmaXmlFetch();
 
 let map;
+// 地図マーカー設定 (追加)
+let mapMarkerSettings = {
+    // 各データソースのマーカー表示/非表示設定
+    // キー: データ配列の名前 (markers オブジェクトのプロパティ名)
+    // 値: true (表示) / false (非表示)
+    cwaEqList_tiny: true,  // 例: CWA Tiny データ
+    cwaEqList: true,       // 例: CWA データ
+    usgsData: true,        // 例: USGS データ
+    bmkgData: true,        // 例: BMKG データ
+    bmkg_M5Data: true,     // 例: BMKG M5+ データ
+    jmaEqList: false,      // 例: JMA データ (デフォルト非表示)
+    cencEqList: false,     // 例: CENC データ (デフォルト非表示)
+    emscEqList: false      // 例: EMSC データ (デフォルト非表示)
+    // 必要に応じて他のデータソースも追加
+};
 // 地図を初期化 (修正箇所 3: 既存の地図があれば削除)
 function initMap() {
   // 既存の地図があれば削除
