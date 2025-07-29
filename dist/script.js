@@ -70,7 +70,9 @@ function checkNewEarthquake(dataArray) {
     // item オブジェクトから時刻情報を取得 (各データソースの形式に対応)
     // 例: time_full, time, shockTime, DateTime など
     //const timeStr = item.time_full || item.time || item.shockTime || item.DateTime || item.origin_time || null;
-
+ const timeStr =
+      item.time_full || item.time || item.shockTime || item.DateTime || "不明";
+   
     if (timeStr) {
       // 文字列を Date オブジェクトに変換
       // 注意: 入力フォーマットによっては、より明示的なパースが必要な場合があります (例: 'YYYY-MM-DD HH:mm:ss')
@@ -83,10 +85,7 @@ function checkNewEarthquake(dataArray) {
       isNaN(earthquakeTime.getTime()) ||
       now - earthquakeTime > oneHourInMillis
     ) {
-      console.log(
-        "通知スキップ: 1時間以上前の地震または時刻情報が無効です",
-        item
-      );
+     
       return; // この item に対する処理をスキップ
     }
     // --- 時刻フィルタリング終了 ---
@@ -147,8 +146,6 @@ function checkNewEarthquake(dataArray) {
 
     // --- 通知内容の作成 ---
     const title = item.Title || item.title || "新しい地震情報";
-    const timeStr =
-      item.time_full || item.time || item.shockTime || item.DateTime || "不明";
     const locationStr = item.location || item.placeName || "不明";
     const magStr = isNaN(mag) ? "不明" : mag.toFixed(1);
     const depthStr = item.depth || item.Depth || "不明";
@@ -164,70 +161,75 @@ function checkNewEarthquake(dataArray) {
   });
 }
 
-// --- ブラウザ通知と音声通知を表示 (レベル別対応版) ---
+// - ブラウザ通知と音声通知を表示 (レベル別対応版) -
 function showNotification(title, body, levelSettings, itemId) {
-  if (!enableNotification || Notification.permission !== "granted") {
-    console.log("通知が許可されていないか、無効です。");
-    return;
-  }
-
-  // --- ブラウザ通知の作成 ---
-  const notificationOptions = {
-    body: body,
-    icon: levelSettings.icon || "favicon.ico", // レベル設定にアイコンがなければデフォルト
-    vibrate: levelSettings.vibrate || [200], // レベル設定にバイブがなければデフォルト
-    tag: `earthquake-alert-${itemId}`, // アイテムIDでタグ付けし、同じ地震の通知が重複しないようにする
-    renotify: true, // 同じタグの通知が来たら上書きして再通知
-    requireInteraction: false, // ユーザーが操作するまで通知を閉じない (オプション)
-  };
-
-  const notification = new Notification(title, notificationOptions);
-
-  // 通知のクリックイベント
-  notification.addEventListener("click", () => {
-    window.focus();
-    notification.close();
-  });
-  setTimeout(() => {
-    if (notification && notification.close) {
-      notification.close();
-      console.log(`通知が自動的に閉じられました: ${title}`);
+    // 通知が有効でない、または許可されていない場合は何もしない
+    if (!enableNotification || Notification.permission !== "granted") {
+        console.log("通知が許可されていないか、無効です。");
+        return;
     }
-  }, 6000); // 6000ミリ秒 = 6秒
 
-  // --- 音声通知（オプション）---
-  if (soundNotification && levelSettings.sound) {
-    // 複数の通知が同時に来た場合に音が重ならないように、既存の再生を停止するか確認
-    // ここでは単純に再生を試みる
-    const audio = new Audio(levelSettings.sound);
-    audio.play().catch((e) => {
-      console.error("音声再生エラー:", e);
-      // iOS Safariなどではユーザー操作がないと再生できない場合がある
-    });
-  }
+    // levelSettings が undefined または null の場合に備えて、デフォルト値を設定
+    const safeLevelSettings = levelSettings || {}; // ✅ levelSettings が falsy なら空オブジェクト
 
-  // --- 通知ログを追加（デバッグ用）---
-  const logContainer = document.getElementById("notificationLog");
-  if (logContainer) {
-    const logEntry = document.createElement("div");
-    logEntry.style.margin = "5px 0";
-    logEntry.style.padding = "5px";
-    logEntry.style.borderLeft = `5px solid ${
-      levelSettings === NOTIFICATION_LEVELS.LOW
-        ? "green"
-        : levelSettings === NOTIFICATION_LEVELS.MEDIUM
-        ? "orange"
-        : "red"
-    }`;
-    logEntry.innerHTML = `<strong>[レベル: ${
-      levelSettings.label
-    }] ${title}</strong><br>${body.replace(/\n/g, "<br>")}`;
-    logContainer.prepend(logEntry);
-    // ログが多すぎないように制限するのも良い
-    // while (logContainer.children.length > 50) { // 例: 最大50件
-    //   logContainer.removeChild(logContainer.lastChild);
-    // }
-  }
+    // - ブラウザ通知の作成 -
+    const notificationOptions = {
+        body: body,
+        // ✅ safeLevelSettings を使用し、さらにその中の icon プロパティが無ければデフォルト値
+        icon: safeLevelSettings.icon || "favicon.ico",
+        // ✅ safeLevelSettings を使用し、さらにその中の vibrate プロパティが無ければデフォルト値
+        vibrate: safeLevelSettings.vibrate || [200],
+        // ... 他のオプションも同様に修正可能 ...
+        // 例: requireInteraction: safeLevelSettings.requireInteraction ?? true,
+    };
+// - 音声通知（オプション）-
+if (soundNotification && levelSettings && levelSettings.sound) { // levelSettings の存在もチェック
+    try {
+        console.log(`音声通知再生を試みます: ${levelSettings.sound}`); // デバッグ用ログ
+        const audio = new Audio(levelSettings.sound);
+        // audio.volume = 0.8; // 必要に応じて音量調整 (0.0 〜 1.0)
+        // audio.load(); // 読み込みを促す（オプション）
+
+        const playPromise = audio.play();
+
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                // iOS Safari など、ユーザー操作なしでの再生がブロックされた場合
+                if (error.name === 'NotAllowedError' || error.name === 'AbortError') {
+                     console.warn(`音声再生がブロックされました。ユーザー操作が必要な可能性があります。ファイル: ${levelSettings.sound}`, error);
+                } else {
+                     console.error(`音声再生エラー (${levelSettings.sound}):`, error.name, error.message);
+                }
+            });
+        }
+    } catch (e) {
+        console.error("音声オブジェクトの作成または再生中にエラーが発生しました:", e);
+    }
+} else if (soundNotification) {
+    // soundNotification は ON だが、levelSettings または levelSettings.sound がない場合
+    console.warn("音声通知が有効ですが、音声ファイルが指定されていません。", levelSettings);
+}
+    try {
+        // - ブラウザ通知の表示 -
+        const notification = new Notification(title, notificationOptions);
+        console.log("通知を表示しました:", title, body, safeLevelSettings);
+
+        // - 音声通知 -
+        if (soundNotification && safeLevelSettings.sound) {
+            playNotificationSound(safeLevelSettings.sound);
+        }
+
+        // - 通知クリック時の動作 -
+        notification.onclick = function () {
+            // 通知クリック時の処理 (例: タブ切り替えなど)
+            console.log("通知がクリックされました:", itemId);
+            // window.focus();
+            // 対応するタブや要素に移動する処理をここに書くことも可能
+        };
+
+    } catch (error) {
+        console.error("通知の作成または表示中にエラーが発生しました:", error);
+    }
 }
 // - 通知設定チェックボックスの状態管理関数 -
 function initNotificationSettings() {
@@ -1988,13 +1990,12 @@ function updateCombinedDisplay() {
   });
 
   // 最終更新時刻を更新
-  const latestTime = new Date(
-    Math.max(...Object.values(lastUpdateTimes).filter((time) => time !== null))
-  );
+    const latestTime = new Date(Math.max(...Object.values(lastUpdateTimes).filter((time) => time !== null)));
+    combinedStatus.textContent = `最新更新: ${formatTimeAgo(latestTime)}`;
 
   combinedStatus.textContent = `最新更新: ${formatTimeAgo(latestTime)}`;
   checkNewEarthquake(allData); // allData は updateCombinedDisplay 内で作成される統合データ配列
-  showNotification(allData); // 通知を表示
+  
 }
 // 時刻差フォーマット
 function formatTimeAgo(time) {
