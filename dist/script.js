@@ -50,7 +50,7 @@ const NOTIFICATION_LEVELS = {
 
 // --- 通知関連のグローバル変数 (既存の変数を置き換えまたは追加) ---
 let enableNotification = true; // 既存
-let soundNotification = false; // 既存
+let soundNotification = true; // 既存
 let magThreshold = 1.0; // 既存
 let lastNotificationId = null; // 既存、通知重複防止用
 let processedIds = new Set(); // 既存、通知済みID記録用
@@ -145,12 +145,13 @@ function checkNewEarthquake(dataArray) {
     }
 
     // --- 通知内容の作成 ---
-    const title = item.Title || item.title || "新しい地震情報";
+   
     const locationStr = item.location || item.placeName || "不明";
     const magStr = isNaN(mag) ? "不明" : mag.toFixed(1);
     const depthStr = item.depth || item.Depth || "不明";
+    const title = `M ${magStr} - ${locationStr}\n` || "新しい地震情報";
 
-    const body = `発生時刻: ${timeStr}\n震源地: ${locationStr}\nマグニチュード: ${magStr}\n深さ: ${depthStr}\n通知レベル: ${notificationLevel.label}`;
+    const body = `発生時刻: ${timeStr}\n深さ: ${depthStr} km\n通知レベル: ${notificationLevel.label}`;
 
     // --- 通知の実行 ---
     showNotification(title, body, notificationLevel, uniqueId);
@@ -214,10 +215,7 @@ if (soundNotification && levelSettings && levelSettings.sound) { // levelSetting
         const notification = new Notification(title, notificationOptions);
         console.log("通知を表示しました:", title, body, safeLevelSettings);
 
-        // - 音声通知 -
-        if (soundNotification && safeLevelSettings.sound) {
-            playNotificationSound(safeLevelSettings.sound);
-        }
+       
 
         // - 通知クリック時の動作 -
         notification.onclick = function () {
