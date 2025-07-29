@@ -1,4 +1,4 @@
-let HypoDate = 5;
+let HypoDate = 0;
 let allData = [];
 // 統合表示用変数
 let combinedData = {
@@ -229,6 +229,66 @@ function showNotification(title, body, levelSettings, itemId) {
     // }
   }
 }
+// - 通知設定チェックボックスの状態管理関数 -
+function initNotificationSettings() {
+    // 1. チェックボックス要素を取得 (関数スコープ内での定義)
+    const enableNotificationCheckbox = document.getElementById("enableNotification");
+    const soundNotificationCheckbox = document.getElementById("soundNotification");
+
+    // 2. チェックボックスの状態が変更されたときのイベントリスナーを設定 (通知有効/無効)
+    if (enableNotificationCheckbox) {
+        enableNotificationCheckbox.addEventListener("change", function () {
+            // チェックボックスの状態をグローバル変数 enableNotification に反映
+            enableNotification = this.checked;
+            console.log("通知設定が変更されました:", enableNotification);
+
+            // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
+            if (enableNotification && Notification.permission !== "granted") {
+                Notification.requestPermission().then((permission) => { // アロー関数に変更
+                    if (permission === "granted") {
+                        console.log("通知の許可が得られました。");
+                    } else {
+                        console.warn("通知の許可がありません。");
+                        // チェックボックスの状態を再度更新してUIを同期させる
+                        enableNotification = false;
+                        enableNotificationCheckbox.checked = false;
+                    }
+                }).catch((error) => { // アロー関数に変更
+                    console.error("通知許可リクエスト中にエラーが発生しました:", error);
+                    enableNotification = false;
+                    enableNotificationCheckbox.checked = false;
+                });
+            }
+            // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
+            // 例: updateCombinedDisplay();
+        });
+    } else {
+        console.warn("ID 'enableNotification' のチェックボックスが見つかりません。");
+    }
+
+    // 3. チェックボックスの状態が変更されたときのイベントリスナーを設定 (音声通知有効/無効)
+    if (soundNotificationCheckbox) {
+        soundNotificationCheckbox.addEventListener("change", function () {
+            // チェックボックスの状態をグローバル変数 soundNotification に反映
+            soundNotification = this.checked;
+            console.log("音声通知設定が変更されました:", soundNotification);
+            // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
+        });
+    } else {
+        console.warn("ID 'soundNotification' のチェックボックスが見つかりません。");
+    }
+
+    // 4. ページ読み込み時に、チェックボックスの状態を現在のグローバル変数値と同期させます。
+    // (これは、設定がローカルストレージなどから読み込まれた場合や、HTMLの初期状態とJS変数が食い違っている場合に重要です)
+    if (enableNotificationCheckbox) {
+        enableNotificationCheckbox.checked = enableNotification;
+    }
+    if (soundNotificationCheckbox) {
+        soundNotificationCheckbox.checked = soundNotification;
+    }
+
+    console.log("通知設定の初期化が完了しました。");
+}
 // 接続状態
 let connections = {
   jmaEew: false,
@@ -305,17 +365,7 @@ document.getElementById("themeToggle").addEventListener("click", () => {
     : "ダークモード";
 });
 
-// ページ読み込み時のテーマ復元
-window.addEventListener("DOMContentLoaded", () => {
-  const savedTheme = localStorage.getItem("theme") || "light";
-  if (savedTheme === "dark") {
-    document.body.classList.add("dark-mode");
-    document.getElementById("themeToggle").textContent = "ライトモード";
-  } else {
-    document.body.classList.remove("dark-mode");
-    document.getElementById("themeToggle").textContent = "ダークモード";
-  }
-});
+
 
 // JMA XMLデータ取得用変数
 let jmaXmlData = [];
@@ -564,24 +614,7 @@ function updateCeaDisplay(data) {
     checkAndNotify(data, "cea"); // ✅ 通知を送信以下に、**新しく地震情報が追加されたときに通知を出す機能**を追加するコードを示します。この機能は既存の統合地震情報システムに統合可能で、マグニチュード閾値や通知のON/OFF設定も可能です。
   }
 }
-// チェックボックスの取得
-const enableNotificationCheckbox =
-  document.getElementById("enableNotification");
-const soundNotificationCheckbox = document.getElementById("soundNotification");
 
-// チェックボックスイベントリスナー
-if (enableNotificationCheckbox) {
-  enableNotificationCheckbox.addEventListener("change", () => {
-    enableNotification = enableNotificationCheckbox.checked;
-    updateCombinedDisplay();
-  });
-}
-
-if (soundNotificationCheckbox) {
-  soundNotificationCheckbox.addEventListener("change", () => {
-    soundNotification = soundNotificationCheckbox.checked;
-  });
-}
 
 // 中国地震局（CEA）接続関数
 function connectCea() {
@@ -3050,6 +3083,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const tabButtons = document.querySelectorAll(".tab-btn");
   const tabContents = document.querySelectorAll(".tab-content");
   const tabIndicator = document.querySelector(".tab-indicator");
+
   const showCwaTinyMarkersInput = document.getElementById("showCwaTinyMarkers");
   const showCwaMarkersInput = document.getElementById("showCwaMarkers");
   const showUsgsMarkersInput = document.getElementById("showUsgsMarkers");
@@ -3060,6 +3094,35 @@ document.addEventListener("DOMContentLoaded", function () {
   const showCencMarkersInput = document.getElementById("showCencMarkers"); // 例
   const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
   const applyMapSettingsButton = document.getElementById("applyMapSettings");
+
+  
+const magThresholdInput = document.getElementById("magThreshold");
+  if (magThresholdInput) {
+    magThresholdInput.value = magThreshold; // 初期値を設定
+    magThresholdInput.addEventListener("change", () => {
+      const newThreshold = parseFloat(magThresholdInput.value);
+      if (!isNaN(newThreshold) && newThreshold >= 0) {
+        magThreshold = newThreshold;
+        // 必要に応じて設定をローカルストレージなどに保存
+      } else {
+        alert("有効な数値を入力してください。");
+        magThresholdInput.value = magThreshold; // 値を元に戻す
+      }
+    });
+  }
+    const savedTheme = localStorage.getItem("theme") || "light";
+  if (savedTheme === "dark") {
+    document.body.classList.add("dark-mode");
+    document.getElementById("themeToggle").textContent = "ライトモード";
+  } else {
+    document.body.classList.remove("dark-mode");
+    document.getElementById("themeToggle").textContent = "ダークモード";
+  }
+
+  // --- 通知設定の初期化 ---
+    // ここで initNotificationSettings 関数を呼び出す
+    initNotificationSettings();
+    // -----------------------
 
   // 一括操作ボタンの要素を取得
   const selectAllButton = document.getElementById("selectAllButton");
@@ -3313,160 +3376,14 @@ document.addEventListener("DOMContentLoaded", function () {
     console.log("タブ要素が見つかりませんでした");
   }
 
-  // ... 既存の他の DOMContentLoaded 内の処理 ...const magThresholdInput = document.getElementById("magThreshold");
-  const magThresholdInput = document.getElementById("magThreshold");
-  if (magThresholdInput) {
-    magThresholdInput.value = magThreshold; // 初期値を設定
-    magThresholdInput.addEventListener("change", () => {
-      const newThreshold = parseFloat(magThresholdInput.value);
-      if (!isNaN(newThreshold) && newThreshold >= 0) {
-        magThreshold = newThreshold;
-        // 必要に応じて設定をローカルストレージなどに保存
-      } else {
-        alert("有効な数値を入力してください。");
-        magThresholdInput.value = magThreshold; // 値を元に戻す
-      }
-    });
-  }
-  const enableNotificationCheckbox =
-    document.getElementById("enableNotification");
-  const soundNotificationCheckbox =
-    document.getElementById("soundNotification");
+  
+  
+  
 
-  // チェックボックスの状態が変更されたときのイベントリスナーを設定
-  if (enableNotificationCheckbox) {
-    enableNotificationCheckbox.addEventListener("change", () => {
-      // チェックボックスの状態をグローバル変数 enableNotification に反映
-      enableNotification = enableNotificationCheckbox.checked;
-      console.log("通知設定が変更されました:", enableNotification);
+  
 
-      // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
-      if (enableNotification && Notification.permission !== "granted") {
-        Notification.requestPermission()
-          .then((permission) => {
-            if (permission === "granted") {
-              console.log("通知の許可が得られました。");
-            } else {
-              console.warn("通知の許可がありません。");
-              // チェックボックスの状態を再度更新してUIを同期させる
-              enableNotification = false;
-              enableNotificationCheckbox.checked = false;
-            }
-          })
-          .catch((error) => {
-            console.error("通知許可リクエスト中にエラーが発生しました:", error);
-            enableNotification = false;
-            enableNotificationCheckbox.checked = false;
-          });
-      }
-      // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
-      // 例: updateCombinedDisplay(); // 表示を更新するなど
-    });
-  }
 
-  if (soundNotificationCheckbox) {
-    soundNotificationCheckbox.addEventListener("change", () => {
-      // チェックボックスの状態をグローバル変数 soundNotification に反映
-      soundNotification = soundNotificationCheckbox.checked;
-      console.log("音声通知設定が変更されました:", soundNotification);
-      // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
-    });
-  }
-
-  // --- ページ読み込み時の初期化 ---
-  // ページ読み込み時に、チェックボックスの状態を現在の変数値と同期させます。
-  // (これは、設定がローカルストレージなどから読み込まれた場合に重要です)
-  document.addEventListener("DOMContentLoaded", function () {
-    if (enableNotificationCheckbox) {
-      enableNotificationCheckbox.checked = enableNotification;
-    }
-    if (soundNotificationCheckbox) {
-      soundNotificationCheckbox.checked = soundNotification;
-    }
-  });
-  // --- 通知設定チェックボックスの状態管理関数 ---
-  function initNotificationSettings() {
-    // チェックボックス要素を取得
-    const enableNotificationCheckbox =
-      document.getElementById("enableNotification");
-    const soundNotificationCheckbox =
-      document.getElementById("soundNotification");
-
-    // チェックボックスの状態が変更されたときのイベントリスナーを設定
-    if (enableNotificationCheckbox) {
-      enableNotificationCheckbox.addEventListener("change", function () {
-        // チェックボックスの状態をグローバル変数 enableNotification に反映
-        enableNotification = this.checked;
-        console.log("通知設定が変更されました:", enableNotification);
-
-        // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
-        if (enableNotification && Notification.permission !== "granted") {
-          Notification.requestPermission()
-            .then(function (permission) {
-              if (permission === "granted") {
-                console.log("通知の許可が得られました。");
-              } else {
-                console.warn("通知の許可がありません。");
-                // チェックボックスの状態を再度更新してUIを同期させる
-                enableNotification = false;
-                enableNotificationCheckbox.checked = false;
-              }
-            })
-            .catch(function (error) {
-              console.error(
-                "通知許可リクエスト中にエラーが発生しました:",
-                error
-              );
-              enableNotification = false;
-              enableNotificationCheckbox.checked = false;
-            });
-        }
-        // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
-        // 例: updateCombinedDisplay();
-      });
-    } else {
-      console.warn(
-        "ID 'enableNotification' のチェックボックスが見つかりません。"
-      );
-    }
-
-    if (soundNotificationCheckbox) {
-      soundNotificationCheckbox.addEventListener("change", function () {
-        // チェックボックスの状態をグローバル変数 soundNotification に反映
-        soundNotification = this.checked;
-        console.log("音声通知設定が変更されました:", soundNotification);
-        // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
-      });
-    } else {
-      console.warn(
-        "ID 'soundNotification' のチェックボックスが見つかりません。"
-      );
-    }
-
-    // --- ページ読み込み時の初期化 ---
-    // ページ読み込み時に、チェックボックスの状態を現在の変数値と同期させます。
-    // (これは、設定がローカルストレージなどから読み込まれた場合に重要です)
-    // ページロード時に初期状態をUIに反映
-    if (enableNotificationCheckbox) {
-      enableNotificationCheckbox.checked = enableNotification;
-    }
-    if (soundNotificationCheckbox) {
-      soundNotificationCheckbox.checked = soundNotification;
-    }
-    initNotificationSettings(); // 初期化関数を呼び出す
-  }
-
-  // --- ページ読み込み完了時に初期化関数を実行 ---
-  // この部分は、既存のDOMContentLoadedリスナー内か、スクリプトの最後に配置してください。
-  // 例:
-  // document.addEventListener("DOMContentLoaded", function() {
-  //     // ... 他の初期化コード ...
-  //     initNotificationSettings(); // この関数を呼び出す
-  //     // ... 他の初期化コード ...
-  // });
-
-  // または、もしDOMContentLoadedリスナーが既に別に定義されている場合、
-  // その中で `initNotificationSettings();` を呼び出してください。
+ 
 });
 
 /**
