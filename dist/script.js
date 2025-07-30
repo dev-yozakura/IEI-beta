@@ -70,9 +70,9 @@ function checkNewEarthquake(dataArray) {
     // item オブジェクトから時刻情報を取得 (各データソースの形式に対応)
     // 例: time_full, time, shockTime, DateTime など
     //const timeStr = item.time_full || item.time || item.shockTime || item.DateTime || item.origin_time || null;
- const timeStr =
+    const timeStr =
       item.time_full || item.time || item.shockTime || item.DateTime || "不明";
-   
+
     if (timeStr) {
       // 文字列を Date オブジェクトに変換
       // 注意: 入力フォーマットによっては、より明示的なパースが必要な場合があります (例: 'YYYY-MM-DD HH:mm:ss')
@@ -85,7 +85,6 @@ function checkNewEarthquake(dataArray) {
       isNaN(earthquakeTime.getTime()) ||
       now - earthquakeTime > oneHourInMillis
     ) {
-     
       return; // この item に対する処理をスキップ
     }
     // --- 時刻フィルタリング終了 ---
@@ -145,7 +144,7 @@ function checkNewEarthquake(dataArray) {
     }
 
     // --- 通知内容の作成 ---
-   
+
     const locationStr = item.location || item.placeName || "不明";
     const magStr = isNaN(mag) ? "不明" : mag.toFixed(1);
     const depthStr = item.depth || item.Depth || "不明";
@@ -164,130 +163,149 @@ function checkNewEarthquake(dataArray) {
 
 // - ブラウザ通知と音声通知を表示 (レベル別対応版) -
 function showNotification(title, body, levelSettings, itemId) {
-    // 通知が有効でない、または許可されていない場合は何もしない
-    if (!enableNotification || Notification.permission !== "granted") {
-        console.log("通知が許可されていないか、無効です。");
-        return;
-    }
+  // 通知が有効でない、または許可されていない場合は何もしない
+  if (!enableNotification || Notification.permission !== "granted") {
+    console.log("通知が許可されていないか、無効です。");
+    return;
+  }
 
-    // levelSettings が undefined または null の場合に備えて、デフォルト値を設定
-    const safeLevelSettings = levelSettings || {}; // ✅ levelSettings が falsy なら空オブジェクト
+  // levelSettings が undefined または null の場合に備えて、デフォルト値を設定
+  const safeLevelSettings = levelSettings || {}; // ✅ levelSettings が falsy なら空オブジェクト
 
-    // - ブラウザ通知の作成 -
-    const notificationOptions = {
-        body: body,
-        // ✅ safeLevelSettings を使用し、さらにその中の icon プロパティが無ければデフォルト値
-        icon: safeLevelSettings.icon || "favicon.ico",
-        // ✅ safeLevelSettings を使用し、さらにその中の vibrate プロパティが無ければデフォルト値
-        vibrate: safeLevelSettings.vibrate || [200],
-        // ... 他のオプションも同様に修正可能 ...
-        // 例: requireInteraction: safeLevelSettings.requireInteraction ?? true,
-    };
-// - 音声通知（オプション）-
-if (soundNotification && levelSettings && levelSettings.sound) { // levelSettings の存在もチェック
+  // - ブラウザ通知の作成 -
+  const notificationOptions = {
+    body: body,
+    // ✅ safeLevelSettings を使用し、さらにその中の icon プロパティが無ければデフォルト値
+    icon: safeLevelSettings.icon || "favicon.ico",
+    // ✅ safeLevelSettings を使用し、さらにその中の vibrate プロパティが無ければデフォルト値
+    vibrate: safeLevelSettings.vibrate || [200],
+    // ... 他のオプションも同様に修正可能 ...
+    // 例: requireInteraction: safeLevelSettings.requireInteraction ?? true,
+  };
+  // - 音声通知（オプション）-
+  if (soundNotification && levelSettings && levelSettings.sound) {
+    // levelSettings の存在もチェック
     try {
-        console.log(`音声通知再生を試みます: ${levelSettings.sound}`); // デバッグ用ログ
-        const audio = new Audio(levelSettings.sound);
-        // audio.volume = 0.8; // 必要に応じて音量調整 (0.0 〜 1.0)
-        // audio.load(); // 読み込みを促す（オプション）
+      console.log(`音声通知再生を試みます: ${levelSettings.sound}`); // デバッグ用ログ
+      const audio = new Audio(levelSettings.sound);
+      // audio.volume = 0.8; // 必要に応じて音量調整 (0.0 〜 1.0)
+      // audio.load(); // 読み込みを促す（オプション）
 
-        const playPromise = audio.play();
+      const playPromise = audio.play();
 
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                // iOS Safari など、ユーザー操作なしでの再生がブロックされた場合
-                if (error.name === 'NotAllowedError' || error.name === 'AbortError') {
-                     console.warn(`音声再生がブロックされました。ユーザー操作が必要な可能性があります。ファイル: ${levelSettings.sound}`, error);
-                } else {
-                     console.error(`音声再生エラー (${levelSettings.sound}):`, error.name, error.message);
-                }
-            });
-        }
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          // iOS Safari など、ユーザー操作なしでの再生がブロックされた場合
+          if (error.name === "NotAllowedError" || error.name === "AbortError") {
+            console.warn(
+              `音声再生がブロックされました。ユーザー操作が必要な可能性があります。ファイル: ${levelSettings.sound}`,
+              error
+            );
+          } else {
+            console.error(
+              `音声再生エラー (${levelSettings.sound}):`,
+              error.name,
+              error.message
+            );
+          }
+        });
+      }
     } catch (e) {
-        console.error("音声オブジェクトの作成または再生中にエラーが発生しました:", e);
+      console.error(
+        "音声オブジェクトの作成または再生中にエラーが発生しました:",
+        e
+      );
     }
-} else if (soundNotification) {
+  } else if (soundNotification) {
     // soundNotification は ON だが、levelSettings または levelSettings.sound がない場合
-    console.warn("音声通知が有効ですが、音声ファイルが指定されていません。", levelSettings);
-}
-    try {
-        // - ブラウザ通知の表示 -
-        const notification = new Notification(title, notificationOptions);
-        console.log("通知を表示しました:", title, body, safeLevelSettings);
+    console.warn(
+      "音声通知が有効ですが、音声ファイルが指定されていません。",
+      levelSettings
+    );
+  }
+  try {
+    // - ブラウザ通知の表示 -
+    const notification = new Notification(title, notificationOptions);
+    console.log("通知を表示しました:", title, body, safeLevelSettings);
 
-       
-
-        // - 通知クリック時の動作 -
-        notification.onclick = function () {
-            // 通知クリック時の処理 (例: タブ切り替えなど)
-            console.log("通知がクリックされました:", itemId);
-            // window.focus();
-            // 対応するタブや要素に移動する処理をここに書くことも可能
-        };
-
-    } catch (error) {
-        console.error("通知の作成または表示中にエラーが発生しました:", error);
-    }
+    // - 通知クリック時の動作 -
+    notification.onclick = function () {
+      // 通知クリック時の処理 (例: タブ切り替えなど)
+      console.log("通知がクリックされました:", itemId);
+      // window.focus();
+      // 対応するタブや要素に移動する処理をここに書くことも可能
+    };
+  } catch (error) {
+    console.error("通知の作成または表示中にエラーが発生しました:", error);
+  }
 }
 // - 通知設定チェックボックスの状態管理関数 -
 function initNotificationSettings() {
-    // 1. チェックボックス要素を取得 (関数スコープ内での定義)
-    const enableNotificationCheckbox = document.getElementById("enableNotification");
-    const soundNotificationCheckbox = document.getElementById("soundNotification");
+  // 1. チェックボックス要素を取得 (関数スコープ内での定義)
+  const enableNotificationCheckbox =
+    document.getElementById("enableNotification");
+  const soundNotificationCheckbox =
+    document.getElementById("soundNotification");
 
-    // 2. チェックボックスの状態が変更されたときのイベントリスナーを設定 (通知有効/無効)
-    if (enableNotificationCheckbox) {
-        enableNotificationCheckbox.addEventListener("change", function () {
-            // チェックボックスの状態をグローバル変数 enableNotification に反映
-            enableNotification = this.checked;
-            console.log("通知設定が変更されました:", enableNotification);
+  // 2. チェックボックスの状態が変更されたときのイベントリスナーを設定 (通知有効/無効)
+  if (enableNotificationCheckbox) {
+    enableNotificationCheckbox.addEventListener("change", function () {
+      // チェックボックスの状態をグローバル変数 enableNotification に反映
+      enableNotification = this.checked;
+      console.log("通知設定が変更されました:", enableNotification);
 
-            // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
-            if (enableNotification && Notification.permission !== "granted") {
-                Notification.requestPermission().then((permission) => { // アロー関数に変更
-                    if (permission === "granted") {
-                        console.log("通知の許可が得られました。");
-                    } else {
-                        console.warn("通知の許可がありません。");
-                        // チェックボックスの状態を再度更新してUIを同期させる
-                        enableNotification = false;
-                        enableNotificationCheckbox.checked = false;
-                    }
-                }).catch((error) => { // アロー関数に変更
-                    console.error("通知許可リクエスト中にエラーが発生しました:", error);
-                    enableNotification = false;
-                    enableNotificationCheckbox.checked = false;
-                });
+      // 通知が有効になった場合、ブラウザの通知許可を確認・リクエスト
+      if (enableNotification && Notification.permission !== "granted") {
+        Notification.requestPermission()
+          .then((permission) => {
+            // アロー関数に変更
+            if (permission === "granted") {
+              console.log("通知の許可が得られました。");
+            } else {
+              console.warn("通知の許可がありません。");
+              // チェックボックスの状態を再度更新してUIを同期させる
+              enableNotification = false;
+              enableNotificationCheckbox.checked = false;
             }
-            // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
-            // 例: updateCombinedDisplay();
-        });
-    } else {
-        console.warn("ID 'enableNotification' のチェックボックスが見つかりません。");
-    }
+          })
+          .catch((error) => {
+            // アロー関数に変更
+            console.error("通知許可リクエスト中にエラーが発生しました:", error);
+            enableNotification = false;
+            enableNotificationCheckbox.checked = false;
+          });
+      }
+      // 必要に応じて、通知設定の変更を反映するために他の関数を呼び出す
+      // 例: updateCombinedDisplay();
+    });
+  } else {
+    console.warn(
+      "ID 'enableNotification' のチェックボックスが見つかりません。"
+    );
+  }
 
-    // 3. チェックボックスの状態が変更されたときのイベントリスナーを設定 (音声通知有効/無効)
-    if (soundNotificationCheckbox) {
-        soundNotificationCheckbox.addEventListener("change", function () {
-            // チェックボックスの状態をグローバル変数 soundNotification に反映
-            soundNotification = this.checked;
-            console.log("音声通知設定が変更されました:", soundNotification);
-            // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
-        });
-    } else {
-        console.warn("ID 'soundNotification' のチェックボックスが見つかりません。");
-    }
+  // 3. チェックボックスの状態が変更されたときのイベントリスナーを設定 (音声通知有効/無効)
+  if (soundNotificationCheckbox) {
+    soundNotificationCheckbox.addEventListener("change", function () {
+      // チェックボックスの状態をグローバル変数 soundNotification に反映
+      soundNotification = this.checked;
+      console.log("音声通知設定が変更されました:", soundNotification);
+      // 必要に応じて、音声通知設定の変更を反映する処理をここに追加
+    });
+  } else {
+    console.warn("ID 'soundNotification' のチェックボックスが見つかりません。");
+  }
 
-    // 4. ページ読み込み時に、チェックボックスの状態を現在のグローバル変数値と同期させます。
-    // (これは、設定がローカルストレージなどから読み込まれた場合や、HTMLの初期状態とJS変数が食い違っている場合に重要です)
-    if (enableNotificationCheckbox) {
-        enableNotificationCheckbox.checked = enableNotification;
-    }
-    if (soundNotificationCheckbox) {
-        soundNotificationCheckbox.checked = soundNotification;
-    }
+  // 4. ページ読み込み時に、チェックボックスの状態を現在のグローバル変数値と同期させます。
+  // (これは、設定がローカルストレージなどから読み込まれた場合や、HTMLの初期状態とJS変数が食い違っている場合に重要です)
+  if (enableNotificationCheckbox) {
+    enableNotificationCheckbox.checked = enableNotification;
+  }
+  if (soundNotificationCheckbox) {
+    soundNotificationCheckbox.checked = soundNotification;
+  }
 
-    console.log("通知設定の初期化が完了しました。");
+  console.log("通知設定の初期化が完了しました。");
 }
 // 接続状態
 let connections = {
@@ -364,8 +382,6 @@ document.getElementById("themeToggle").addEventListener("click", () => {
     ? "ライトモード"
     : "ダークモード";
 });
-
-
 
 // JMA XMLデータ取得用変数
 let jmaXmlData = [];
@@ -614,7 +630,6 @@ function updateCeaDisplay(data) {
     checkAndNotify(data, "cea"); // ✅ 通知を送信以下に、**新しく地震情報が追加されたときに通知を出す機能**を追加するコードを示します。この機能は既存の統合地震情報システムに統合可能で、マグニチュード閾値や通知のON/OFF設定も可能です。
   }
 }
-
 
 // 中国地震局（CEA）接続関数
 function connectCea() {
@@ -1696,7 +1711,7 @@ function updateCombinedDisplay() {
     initMapWithMarkers(map, combinedData);
   } else if (map) {
     //console.log(
-   //   "updateCombinedDisplay: 地図は初期化されていますが、tab2 は非アクティブです。マーカー更新をスキップします。"
+    //   "updateCombinedDisplay: 地図は初期化されていますが、tab2 は非アクティブです。マーカー更新をスキップします。"
     //);
     // オプション: tab2 が非アクティブな場合でも、地図のデータ（マーカー）だけは更新しておきたい場合
     // （ただし表示はされない）。これはパフォーマンス的に微妙な場合もあるので注意。
@@ -1988,12 +2003,13 @@ function updateCombinedDisplay() {
   });
 
   // 最終更新時刻を更新
-    const latestTime = new Date(Math.max(...Object.values(lastUpdateTimes).filter((time) => time !== null)));
-    combinedStatus.textContent = `最新更新: ${formatTimeAgo(latestTime)}`;
+  const latestTime = new Date(
+    Math.max(...Object.values(lastUpdateTimes).filter((time) => time !== null))
+  );
+  combinedStatus.textContent = `最新更新: ${formatTimeAgo(latestTime)}`;
 
   combinedStatus.textContent = `最新更新: ${formatTimeAgo(latestTime)}`;
   checkNewEarthquake(allData); // allData は updateCombinedDisplay 内で作成される統合データ配列
-  
 }
 // 時刻差フォーマット
 function formatTimeAgo(time) {
@@ -2903,18 +2919,18 @@ initialJmaXmlFetch();
 let map;
 // 地図マーカー設定 (追加)
 let mapMarkerSettings = {
-    // 各データソースのマーカー表示/非表示設定
-    // キー: データ配列の名前 (markers オブジェクトのプロパティ名)
-    // 値: true (表示) / false (非表示)
-    cwaEqList_tiny: true,  // 例: CWA Tiny データ
-    cwaEqList: true,       // 例: CWA データ
-    usgsData: true,        // 例: USGS データ
-    bmkgData: true,        // 例: BMKG データ
-    bmkg_M5Data: true,     // 例: BMKG M5+ データ
-    jmaEqList: false,      // 例: JMA データ (デフォルト非表示)
-    cencEqList: false,     // 例: CENC データ (デフォルト非表示)
-    emscEqList: false      // 例: EMSC データ (デフォルト非表示)
-    // 必要に応じて他のデータソースも追加
+  // 各データソースのマーカー表示/非表示設定
+  // キー: データ配列の名前 (markers オブジェクトのプロパティ名)
+  // 値: true (表示) / false (非表示)
+  cwaEqList_tiny: true, // 例: CWA Tiny データ
+  cwaEqList: true, // 例: CWA データ
+  usgsData: true, // 例: USGS データ
+  bmkgData: true, // 例: BMKG データ
+  bmkg_M5Data: true, // 例: BMKG M5+ データ
+  jmaEqList: false, // 例: JMA データ (デフォルト非表示)
+  cencEqList: false, // 例: CENC データ (デフォルト非表示)
+  emscEqList: false, // 例: EMSC データ (デフォルト非表示)
+  // 必要に応じて他のデータソースも追加
 };
 // 地図を初期化 (修正箇所 3: 既存の地図があれば削除)
 function initMap() {
@@ -3109,8 +3125,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
   const applyMapSettingsButton = document.getElementById("applyMapSettings");
 
-  
-const magThresholdInput = document.getElementById("magThreshold");
+  const magThresholdInput = document.getElementById("magThreshold");
   if (magThresholdInput) {
     magThresholdInput.value = magThreshold; // 初期値を設定
     magThresholdInput.addEventListener("change", () => {
@@ -3124,7 +3139,7 @@ const magThresholdInput = document.getElementById("magThreshold");
       }
     });
   }
-    const savedTheme = localStorage.getItem("theme") || "light";
+  const savedTheme = localStorage.getItem("theme") || "light";
   if (savedTheme === "dark") {
     document.body.classList.add("dark-mode");
     document.getElementById("themeToggle").textContent = "ライトモード";
@@ -3134,9 +3149,9 @@ const magThresholdInput = document.getElementById("magThreshold");
   }
 
   // --- 通知設定の初期化 ---
-    // ここで initNotificationSettings 関数を呼び出す
-    initNotificationSettings();
-    // -----------------------
+  // ここで initNotificationSettings 関数を呼び出す
+  initNotificationSettings();
+  // -----------------------
 
   // 一括操作ボタンの要素を取得
   const selectAllButton = document.getElementById("selectAllButton");
@@ -3260,7 +3275,10 @@ const magThresholdInput = document.getElementById("magThreshold");
             }, 100); // 少し遅延させて実行
           }
         }
-
+        // tab1_1 がアクティブになったときにデータを取得
+        if (button.dataset.tab === "tab1_1") {
+          fetchTsunamiData();
+        }
         // tab2.1 がアクティブになったときの処理 (変更なし、または必要に応じて調整)
         if (button.dataset.tab === "tab2.1") {
           console.log("tab2.1 がアクティブ: グラフを描画します");
@@ -3389,15 +3407,6 @@ const magThresholdInput = document.getElementById("magThreshold");
   } else {
     console.log("タブ要素が見つかりませんでした");
   }
-
-  
-  
-  
-
-  
-
-
- 
 });
 
 /**
@@ -3502,106 +3511,111 @@ async function fetchJmaHypoData(daysBack = 7) {
 
 // 直交座標 3D 散布図
 function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
-   (async () => {
-  try {
-    // updateCombinedDisplay 内のデータ準備ロジックを一部再利用
-    // ただし、allData はグローバル変数または updateCombinedDisplay から渡される必要があります
-    // ここでは updateCombinedDisplay が allData をグローバルに設定していると仮定します
-    // より良い方法は、allData を引数として渡すことです。
-
-    if (!Array.isArray(allData)) {
-      // ✅ typeof 比較を簡略化
-      console.warn("グラフ描画: allData が配列ではありません。");
-      document.getElementById(containerId).innerHTML =
-        "<p>表示するデータがありません (データ形式エラー)。</p>";
-      return;
-    }
-    if (allData.length === 0) {
-      // ✅ データが空の場合もチェック
-      console.warn("グラフ描画: allData が空です。");
-      document.getElementById(containerId).innerHTML =
-        "<p>表示する地震データがありません。</p>";
-      return;
-    }
-
-    // 1. データを準備
-    const lats = []; // 緯度
-    const lons = []; // 経度
-    const depths = []; // 深さ (km)
-    const magnitudes = []; // マグニチュード
-    const hoverTexts = []; // ホバーテキスト
-    const sourceInfo = []; // 情報源
-
-    // allData から必要な情報を抽出 (データ構造に応じて調整)
-    allData.forEach((item) => {
-      let lat, lon, depth, mag, location, source;
-
-      // USGS GeoJSON 形式 (例)
-      if (item.geometry && item.properties) {
-        lat = item.geometry.coordinates[1];
-        lon = item.geometry.coordinates[0];
-        depth = item.geometry.coordinates[2];
-        mag = item.properties.mag;
-        location = item.properties.place || "不明";
-        source = "USGS";
-      }
-      // JMA GeoJSON 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
-      else if (item.lat !== undefined && item.lng !== undefined) {
-        lat = parseFloat(item.lat);
-        lon = parseFloat(item.lng);
-        depth = parseFloat(item.depth);
-        mag = parseFloat(item.magnitude);
-        location = item.location || item.Title || "不明";
-        source = item.source || "不明";
-      }
-      // EMSC 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
-      else if (item.type === "Feature" && item.geometry && item.properties) {
-        const coords = item.geometry.coordinates;
-        if (coords && coords.length >= 3) {
-          lon = parseFloat(coords[0]);
-          lat = parseFloat(coords[1]);
-          depth = parseFloat(coords[2]);
-          mag = parseFloat(item.properties.mag);
-          location =
-            item.properties.place || item.properties.flynn_region || "不明";
-          source = "EMSC";
-        }
-      }
-      // 他の形式 (例: CENC, BMKG, CWA 等) もここに追加
-      // ... (他の条件分岐) ...
-
-      // 必須データが存在し、数値に変換可能な場合のみ追加
-      if (!isNaN(lat) && !isNaN(lon) && !isNaN(depth) && !isNaN(mag)) {
-        lats.push(lat);
-        lons.push(lon);
-        depths.push(-depth); // Plotly では深さを負の値で表現するのが一般的 (奥がマイナス)
-        magnitudes.push(mag);
-        hoverTexts.push(
-          `場所: ${location}<br>緯度: ${lat.toFixed(4)}<br>経度: ${lon.toFixed(
-            4
-          )}<br>深さ: ${depth.toFixed(1)} km<br>マグニチュード: ${mag.toFixed(
-            1
-          )}<br>情報源: ${source}`
-        );
-        sourceInfo.push(source); // 情報源を分類に使用
-      }
-    });
-
-    if (lats.length === 0) {
-      console.warn("グラフ描画: 有効な地震データがありません。");
-      document.getElementById(containerId).innerHTML =
-        "<p>有効な地震データがありません。</p>";
-      return;
-    }
-    // === 新規: Datamaps World.json データの取得と処理 (直交3D用) ===
-    let worldMapTraceOrtho = null; // 直交3D用の世界地図トレース変数
+  (async () => {
     try {
+      // updateCombinedDisplay 内のデータ準備ロジックを一部再利用
+      // ただし、allData はグローバル変数または updateCombinedDisplay から渡される必要があります
+      // ここでは updateCombinedDisplay が allData をグローバルに設定していると仮定します
+      // より良い方法は、allData を引数として渡すことです。
+
+      if (!Array.isArray(allData)) {
+        // ✅ typeof 比較を簡略化
+        console.warn("グラフ描画: allData が配列ではありません。");
+        document.getElementById(containerId).innerHTML =
+          "<p>表示するデータがありません (データ形式エラー)。</p>";
+        return;
+      }
+      if (allData.length === 0) {
+        // ✅ データが空の場合もチェック
+        console.warn("グラフ描画: allData が空です。");
+        document.getElementById(containerId).innerHTML =
+          "<p>表示する地震データがありません。</p>";
+        return;
+      }
+
+      // 1. データを準備
+      const lats = []; // 緯度
+      const lons = []; // 経度
+      const depths = []; // 深さ (km)
+      const magnitudes = []; // マグニチュード
+      const hoverTexts = []; // ホバーテキスト
+      const sourceInfo = []; // 情報源
+
+      // allData から必要な情報を抽出 (データ構造に応じて調整)
+      allData.forEach((item) => {
+        let lat, lon, depth, mag, location, source;
+
+        // USGS GeoJSON 形式 (例)
+        if (item.geometry && item.properties) {
+          lat = item.geometry.coordinates[1];
+          lon = item.geometry.coordinates[0];
+          depth = item.geometry.coordinates[2];
+          mag = item.properties.mag;
+          location = item.properties.place || "不明";
+          source = "USGS";
+        }
+        // JMA GeoJSON 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
+        else if (item.lat !== undefined && item.lng !== undefined) {
+          lat = parseFloat(item.lat);
+          lon = parseFloat(item.lng);
+          depth = parseFloat(item.depth);
+          mag = parseFloat(item.magnitude);
+          location = item.location || item.Title || "不明";
+          source = item.source || "不明";
+        }
+        // EMSC 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
+        else if (item.type === "Feature" && item.geometry && item.properties) {
+          const coords = item.geometry.coordinates;
+          if (coords && coords.length >= 3) {
+            lon = parseFloat(coords[0]);
+            lat = parseFloat(coords[1]);
+            depth = parseFloat(coords[2]);
+            mag = parseFloat(item.properties.mag);
+            location =
+              item.properties.place || item.properties.flynn_region || "不明";
+            source = "EMSC";
+          }
+        }
+        // 他の形式 (例: CENC, BMKG, CWA 等) もここに追加
+        // ... (他の条件分岐) ...
+
+        // 必須データが存在し、数値に変換可能な場合のみ追加
+        if (!isNaN(lat) && !isNaN(lon) && !isNaN(depth) && !isNaN(mag)) {
+          lats.push(lat);
+          lons.push(lon);
+          depths.push(-depth); // Plotly では深さを負の値で表現するのが一般的 (奥がマイナス)
+          magnitudes.push(mag);
+          hoverTexts.push(
+            `場所: ${location}<br>緯度: ${lat.toFixed(
+              4
+            )}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(
+              1
+            )} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`
+          );
+          sourceInfo.push(source); // 情報源を分類に使用
+        }
+      });
+
+      if (lats.length === 0) {
+        console.warn("グラフ描画: 有効な地震データがありません。");
+        document.getElementById(containerId).innerHTML =
+          "<p>有効な地震データがありません。</p>";
+        return;
+      }
+      // === 新規: Datamaps World.json データの取得と処理 (直交3D用) ===
+      let worldMapTraceOrtho = null; // 直交3D用の世界地図トレース変数
+      try {
         // ✅ 球面3Dと同じ geo.json ファイルを使用
         const WORLD_MAP_URL = "custom.geomedium.json";
-        console.log("世界地図データ (Datamaps/直交3D) を取得します...", WORLD_MAP_URL);
+        console.log(
+          "世界地図データ (Datamaps/直交3D) を取得します...",
+          WORLD_MAP_URL
+        );
         const response = await fetch(WORLD_MAP_URL);
         if (!response.ok) {
-            throw new Error(`世界地図データ取得エラー: HTTP status ${response.status}`);
+          throw new Error(
+            `世界地図データ取得エラー: HTTP status ${response.status}`
+          );
         }
         const worldData = await response.json();
         console.log("世界地図データ (Datamaps/直交3D) を取得しました。");
@@ -3615,117 +3629,125 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
         const FIXED_WORLD_DEPTH = 0; // km (負の値で地表下を意味する場合が多いです)
 
         worldData.features.forEach((feature) => {
-            // Polygon と MultiPolygon の両方を処理
-            let coordinatesList = [];
-            if (feature.geometry.type === "Polygon") {
-                coordinatesList = feature.geometry.coordinates; // [ [ [lng, lat], ... ], ... ]
-            } else if (feature.geometry.type === "MultiPolygon") {
-                // MultiPolygon は Polygon の配列 [ [ [ [lng, lat], ... ], ... ], ... ]
-                // すべての Polygon をフラット化して処理
-                feature.geometry.coordinates.forEach(polygon => coordinatesList.push(...polygon));
-            }
-            // 他の geometry type (Point, LineString) は無視
+          // Polygon と MultiPolygon の両方を処理
+          let coordinatesList = [];
+          if (feature.geometry.type === "Polygon") {
+            coordinatesList = feature.geometry.coordinates; // [ [ [lng, lat], ... ], ... ]
+          } else if (feature.geometry.type === "MultiPolygon") {
+            // MultiPolygon は Polygon の配列 [ [ [ [lng, lat], ... ], ... ], ... ]
+            // すべての Polygon をフラット化して処理
+            feature.geometry.coordinates.forEach((polygon) =>
+              coordinatesList.push(...polygon)
+            );
+          }
+          // 他の geometry type (Point, LineString) は無視
 
-            coordinatesList.forEach((ring) => {
-                // 各リングを処理
-                ring.forEach((coord) => {
-                    const lon = coord[0];
-                    const lat = coord[1];
-                    if (isNaN(lat) || isNaN(lon)) return;
-                    worldLons.push(lon);
-                    worldLats.push(lat);
-                    worldDepth.push(FIXED_WORLD_DEPTH); // 固定深さ
-                });
-                // 各リングの終端に NaN を挿入 (線が繋がりすぎないようにする)
-                worldLons.push(NaN);
-                worldLats.push(NaN);
-                worldDepth.push(NaN);
+          coordinatesList.forEach((ring) => {
+            // 各リングを処理
+            ring.forEach((coord) => {
+              const lon = coord[0];
+              const lat = coord[1];
+              if (isNaN(lat) || isNaN(lon)) return;
+              worldLons.push(lon);
+              worldLats.push(lat);
+              worldDepth.push(FIXED_WORLD_DEPTH); // 固定深さ
             });
-            // Feature 間の区切りにも NaN を挿入 (オプション)
+            // 各リングの終端に NaN を挿入 (線が繋がりすぎないようにする)
             worldLons.push(NaN);
             worldLats.push(NaN);
             worldDepth.push(NaN);
+          });
+          // Feature 間の区切りにも NaN を挿入 (オプション)
+          worldLons.push(NaN);
+          worldLats.push(NaN);
+          worldDepth.push(NaN);
         });
 
         if (worldLons.length > 0) {
-            worldMapTraceOrtho = {
-                type: "scatter3d",
-                mode: "lines", // 線で境界を描画
-                x: worldLons, // X軸: 経度
-                y: worldLats, // Y軸: 緯度
-                z: worldDepth, // Z軸: 固定深さ
-                line: {
-                    color: "lightblue", // 色を指定 (球面版と区別するために変更)
-                    width: 2.5, // 線の太さを指定 (細く)
-                },
-                name: "世界地図境界 (直交)",
-                hoverinfo: "skip", // ホバー情報を非表示
-            };
-            console.log("世界地図 (Datamaps/直交3D) トレースを作成しました。");
+          worldMapTraceOrtho = {
+            type: "scatter3d",
+            mode: "lines", // 線で境界を描画
+            x: worldLons, // X軸: 経度
+            y: worldLats, // Y軸: 緯度
+            z: worldDepth, // Z軸: 固定深さ
+            line: {
+              color: "lightblue", // 色を指定 (球面版と区別するために変更)
+              width: 2.5, // 線の太さを指定 (細く)
+            },
+            name: "世界地図境界 (直交)",
+            hoverinfo: "skip", // ホバー情報を非表示
+          };
+          console.log("世界地図 (Datamaps/直交3D) トレースを作成しました。");
         } else {
-            console.warn("世界地図データ (Datamaps/直交3D) から有効なポイントが生成されませんでした。");
+          console.warn(
+            "世界地図データ (Datamaps/直交3D) から有効なポイントが生成されませんでした。"
+          );
         }
-    } catch (error) {
-        console.error("世界地図データ (Datamaps/直交3D) の取得または処理中にエラーが発生しました:", error);
-        console.warn("世界地図データ (直交3D) の読み込みに失敗しましたが、他の要素は表示されます。");
-    }
-    // === 新規: Datamaps World.json データの取得と処理 (直交3D用) ここまで ===
-    // 2. データトレースの定義
-    const uniqueSources = [...new Set(sourceInfo)];
-     // worldMapTraceOrtho を最初に追加し、その後に地震データトレースを追加
-    const traces = [
+      } catch (error) {
+        console.error(
+          "世界地図データ (Datamaps/直交3D) の取得または処理中にエラーが発生しました:",
+          error
+        );
+        console.warn(
+          "世界地図データ (直交3D) の読み込みに失敗しましたが、他の要素は表示されます。"
+        );
+      }
+      // === 新規: Datamaps World.json データの取得と処理 (直交3D用) ここまで ===
+      // 2. データトレースの定義
+      const uniqueSources = [...new Set(sourceInfo)];
+      // worldMapTraceOrtho を最初に追加し、その後に地震データトレースを追加
+      const traces = [
         ...(worldMapTraceOrtho ? [worldMapTraceOrtho] : []), // 世界地図境界を最初に描画
         ...uniqueSources.map((src) => {
-      const indices = sourceInfo
-        .map((s, i) => (s === src ? i : null))
-        .filter((i) => i !== null);
-      return {
-        type: "scatter3d",
-        mode: "markers",
-        x: indices.map((i) => lons[i]), // X軸: 経度
-        y: indices.map((i) => lats[i]), // Y軸: 緯度
-        z: indices.map((i) => depths[i]), // Z軸: 深さ (負の値)
-        name: src, // 凡例に表示される名前
-        text: indices.map((i) => hoverTexts[i]), // ホバーテキスト
-        hoverinfo: "text",
-        marker: {
-          size: indices.map((i) => Math.max(2, (2 + magnitudes[i]) * 2)), // 最小サイズを設定
-          sizemode: "diameter",
-          // color: indices.map(i => depths[i]), // 色を深さに応じて変える場合
-          // colorscale: 'Viridis',
-          // colorbar: { title: 'Depth (km)' },
-          opacity: 0.7,
+          const indices = sourceInfo
+            .map((s, i) => (s === src ? i : null))
+            .filter((i) => i !== null);
+          return {
+            type: "scatter3d",
+            mode: "markers",
+            x: indices.map((i) => lons[i]), // X軸: 経度
+            y: indices.map((i) => lats[i]), // Y軸: 緯度
+            z: indices.map((i) => depths[i]), // Z軸: 深さ (負の値)
+            name: src, // 凡例に表示される名前
+            text: indices.map((i) => hoverTexts[i]), // ホバーテキスト
+            hoverinfo: "text",
+            marker: {
+              size: indices.map((i) => Math.max(2, (2 + magnitudes[i]) * 2)), // 最小サイズを設定
+              sizemode: "diameter",
+              // color: indices.map(i => depths[i]), // 色を深さに応じて変える場合
+              // colorscale: 'Viridis',
+              // colorbar: { title: 'Depth (km)' },
+              opacity: 0.7,
+            },
+          };
+        }),
+      ];
+
+      // 3. レイアウトの定義
+      const layout = {
+        title: "地震データ 3D プロット (緯度/経度/深さ)",
+        font: { color: "white" },
+        paper_bgcolor: "black", // グラフ全体の背景色
+        plot_bgcolor: "white", // プロット領域の背景色
+        scene: {
+          aspectmode: "manual", // <--- 手動でアスペクト比を設定
+          aspectratio: { x: 16, y: 9, z: 2 }, // <--- 例: X軸をY軸、Z軸の2倍の長さにする
+
+          xaxis: { title: "経度 (Longitude)" },
+          yaxis: { title: "緯度 (Latitude)" },
+          zaxis: { title: "深さ (Depth km)" },
         },
+        margin: { l: 0, r: 0, b: 0, t: 50 },
       };
-    }),
-    ];
 
-    // 3. レイアウトの定義
-    const layout = {
-      title: "地震データ 3D プロット (緯度/経度/深さ)",
-      font: { color: "white" },
-      paper_bgcolor: "black", // グラフ全体の背景色
-      plot_bgcolor: "white", // プロット領域の背景色
-      scene: {
-        aspectmode: "manual", // <--- 手動でアスペクト比を設定
-            aspectratio: { x: 16, y: 9, z: 2 }, // <--- 例: X軸をY軸、Z軸の2倍の長さにする
-           
-        xaxis: { title: "経度 (Longitude)" },
-        yaxis: { title: "緯度 (Latitude)" },
-        zaxis: { title: "深さ (Depth km)" },
-      },
-      margin: { l: 0, r: 0, b: 0, t: 50 },
-    };
-
-    // 4. グラフを描画
-    Plotly.react(containerId, traces, layout);
-  } catch (error) {
-    console.error("Plotly グラフ描画エラー:", error);
-    document.getElementById(containerId).innerHTML =
-      "<p>グラフの描画中にエラーが発生しました。</p>";
-  }
-}
-)();
+      // 4. グラフを描画
+      Plotly.react(containerId, traces, layout);
+    } catch (error) {
+      console.error("Plotly グラフ描画エラー:", error);
+      document.getElementById(containerId).innerHTML =
+        "<p>グラフの描画中にエラーが発生しました。</p>";
+    }
+  })();
 }
 // 球面 3D 散布図
 function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
@@ -4217,3 +4239,165 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
   })();
 }
 initNotificationSettings();
+
+// --- 津波情報取得機能 ---
+const tsunamiDataContainer = document.getElementById("tsunamiData");
+const tsunamiStatusElement = document.getElementById("tsunamiStatus");
+const refreshBtn = document.getElementById("refreshTsunamiBtn");
+const autoRefreshCheckbox = document.getElementById("autoRefreshTsunami");
+
+let autoRefreshInterval = null;
+
+// 最終更新時刻をフォーマットする関数
+function formatUpdateTime(date) {
+  const now = new Date();
+  const diffMs = now - date;
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) {
+    return `${diffSecs}秒前`;
+  } else if (diffMins < 60) {
+    return `${diffMins}分前`;
+  } else if (diffHours < 24) {
+    return `${diffHours}時間前`;
+  } else {
+    return `${diffDays}日前`;
+  }
+}
+
+// 津波情報を取得して表示する関数
+async function fetchTsunamiData() {
+  tsunamiDataContainer.innerHTML =
+    '<div class="loading">津波情報を読み込んでいます...</div>';
+  tsunamiStatusElement.textContent = "更新中...";
+
+  try {
+    const response = await fetch("https://api.p2pquake.net/v2/jma/tsunami");
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+
+    // 最終更新時刻を表示
+    const lastUpdate = new Date();
+    tsunamiStatusElement.textContent = `最終更新: ${formatUpdateTime(
+      lastUpdate
+    )} (${lastUpdate.toLocaleString("ja-JP")})`;
+
+    if (!data || data.length === 0) {
+      tsunamiDataContainer.innerHTML =
+        '<div class="no-data">津波情報がありません。</div>';
+      return;
+    }
+
+    // APIは配列を返すが、通常最新の1件のみ表示
+    const latestTsunamiInfo = data[0]; // 最新の情報を取得
+
+    if (latestTsunamiInfo.cancelled) {
+      tsunamiDataContainer.innerHTML = `
+                            <div class="tsunami-item">
+                                <p class="no-tsunami-warning">津波警報・注意報はすべて解除されました。</p>
+                                <p class="tsunami-time">発表時刻: ${new Date(
+                                  latestTsunamiInfo.time
+                                ).toLocaleString("ja-JP")}</p>
+                            </div>
+                        `;
+      return;
+    }
+
+    if (!latestTsunamiInfo.areas || latestTsunamiInfo.areas.length === 0) {
+      tsunamiDataContainer.innerHTML = `
+                            <div class="tsunami-item">
+                                <p class="no-tsunami-warning">津波警報・注意報は発表されていません。</p>
+                                <p class="tsunami-time">発表時刻: ${new Date(
+                                  latestTsunamiInfo.time
+                                ).toLocaleString("ja-JP")}</p>
+                            </div>
+                        `;
+      return;
+    }
+
+    // 津波情報を表示
+    let htmlContent = `<h3>発表時刻: ${new Date(
+      latestTsunamiInfo.time
+    ).toLocaleString("ja-JP")}</h3>`;
+    latestTsunamiInfo.areas.forEach((area) => {
+      const gradeText =
+        area.grade === "Warning"
+          ? "【警報】"
+          : area.grade === "Watch"
+          ? "【注意報】"
+          : area.grade;
+      const gradeClass =
+        area.grade === "Warning"
+          ? "tsunami-grade-warning"
+          : area.grade === "Watch"
+          ? "tsunami-grade-watch"
+          : "";
+      const immediateText = area.immediate ? " (直ちに来襲)" : "";
+      const firstHeightCondition = area.firstHeight?.condition || "情報なし";
+      const firstHeightTime = area.firstHeight?.arrivalTime
+        ? ` (${new Date(area.firstHeight.arrivalTime).toLocaleTimeString(
+            "ja-JP",
+            { hour: "2-digit", minute: "2-digit" }
+          )})`
+        : "";
+      const maxHeightDescription = area.maxHeight?.description || "情報なし";
+
+      htmlContent += `
+                            <div class="tsunami-item">
+                                <div class="tsunami-area-name">${area.name}</div>
+                                <p class="tsunami-grade ${gradeClass}">${gradeText}${immediateText}</p>
+                                <p class="tsunami-height">第1波到達予測: ${firstHeightCondition}${firstHeightTime}</p>
+                                <p class="tsunami-height">予想最大波高: ${maxHeightDescription}</p>
+                            </div>
+                        `;
+    });
+
+    tsunamiDataContainer.innerHTML = htmlContent;
+  } catch (error) {
+    console.error("津波情報の取得中にエラーが発生しました:", error);
+    tsunamiDataContainer.innerHTML = `<div class="error">津波情報の取得に失敗しました: ${error.message}</div>`;
+    tsunamiStatusElement.textContent = "更新失敗";
+  }
+}
+
+// 手動更新ボタン
+refreshBtn.addEventListener("click", fetchTsunamiData);
+
+// 自動更新機能
+function startAutoRefresh() {
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  autoRefreshInterval = setInterval(() => {
+    // タブがアクティブな時のみ更新
+    if (document.getElementById("tab1_1").classList.contains("active")) {
+      fetchTsunamiData();
+    }
+  }, 30000); // 30秒ごと
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+}
+
+autoRefreshCheckbox.addEventListener("change", (e) => {
+  if (e.target.checked) {
+    startAutoRefresh();
+  } else {
+    stopAutoRefresh();
+  }
+});
+
+// 初期状態で自動更新を開始
+startAutoRefresh();
+
+// ページ読み込み時またはタブ切り替え時にデータを取得
+// DOMContentLoaded内で tab1_1 が最初からアクティブなら取得
+// ここではタブ切り替えイベントで処理するので、初期は不要
+// fetchTsunamiData(); // 最初から tab1_1 を表示する場合は有効化
