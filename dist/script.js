@@ -1,5 +1,10 @@
 let HypoDate = 0;
 let allData = [];
+// ファイルの先頭付近にグローバル変数を宣言
+let latestTsunamiInfo = null; // 既存
+let tsunamiAreaGeoJson = null; // <-- 追加: 津波区域GeoJSONデータ用
+let tsunamiAreaGeoJsonData = null; // 既存
+let tsunamiLayer = null; // 既存
 // 統合表示用変数
 let combinedData = {
   jmaEew: null,
@@ -1791,7 +1796,7 @@ function updateCombinedDisplay() {
     // BMKG地震情報
     if (item.source === "bmkg" && item.displayType === "eq") {
       html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
-      //html += `<p class="time">発生時刻: ${item.Tanggal} ${item.Jam}</p>`;
+      html += `<p class="time">発生時刻: ${item.Tanggal} ${item.Jam}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
       html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
@@ -2949,6 +2954,14 @@ function initMap() {
   }).addTo(map);
   console.log("タイルレイヤーを追加しました");
 
+   // === 追加: 津波GeoJSONデータの取得 (地図初期化時) ===
+    fetchTsunamiAreaGeoJson().then(() => {
+         // 津波データ取得後、津波レイヤーを初期化 (まだ警報情報はない)
+         if (map) {
+             updateTsunamiLayerOnMap(); // 初期状態のレイヤーを追加
+         }
+    });
+    // === 追加 ここまで ===
   // 2. プレート境界をGeoJSONで追加
   fetch(
     "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json"
@@ -3082,6 +3095,7 @@ function initMapWithMarkers(map, markers) {
 
 window.addEventListener("load", function () {
   console.log("ページロード完了イベント発火");
+  
   // --- 修正箇所 1: tab2 の地図初期化を削除 ---
   // 以下のコードブロックをコメントアウトまたは削除します。
   /*
@@ -3107,7 +3121,10 @@ window.addEventListener("load", function () {
     */
   // --- 修正箇所 1 ここまで ---
 });
-
+window.addEventListener('load', async () => {
+    await fetchTsunamiAreaGeoJson();
+    // ... 他の初期化処理 ...
+});
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOMContentLoadedイベント発火");
   const tabButtons = document.querySelectorAll(".tab-btn");
@@ -3265,7 +3282,15 @@ document.addEventListener("DOMContentLoaded", function () {
           } else {
             console.log(
               "tab2: 地図は既に初期化されています。サイズを再計算します"
+              
             );
+              // === 追加: tab2 アクティブ時に津波レイヤーを更新 ===
+        // 津波情報が既に取得済みの場合、地図レイヤーを更新
+        if (latestTsunamiInfo && tsunamiAreaGeoJsonData) {
+             updateTsunamiLayerOnMap();
+             console.log("tab2: 津波レイヤーを更新しました。");
+        }
+        // === 追加 ここまで ===
             // 地図が既に存在する場合は、サイズを再計算
             setTimeout(() => {
               if (map) {
@@ -3606,7 +3631,7 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
       let worldMapTraceOrtho = null; // 直交3D用の世界地図トレース変数
       try {
         // ✅ 球面3Dと同じ geo.json ファイルを使用
-        const WORLD_MAP_URL = "custom.geomedium.json";
+        const WORLD_MAP_URL = "custom.geohigh.json";
         console.log(
           "世界地図データ (Datamaps/直交3D) を取得します...",
           WORLD_MAP_URL
@@ -3712,7 +3737,7 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
             text: indices.map((i) => hoverTexts[i]), // ホバーテキスト
             hoverinfo: "text",
             marker: {
-              size: indices.map((i) => Math.max(2, (2 + magnitudes[i]) * 2)), // 最小サイズを設定
+              size: indices.map((i) => Math.max(2, (5 + Math.pow(magnitudes[i], 1.7)))), // 最小サイズを設定
               sizemode: "diameter",
               // color: indices.map(i => depths[i]), // 色を深さに応じて変える場合
               // colorscale: 'Viridis',
@@ -3754,6 +3779,140 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
   // 非同期関数として定義
   (async () => {
     try {
+        // --- 津波トレース生成のためのコード追加開始 ---
+            let tsunamiTraces = []; // 津波関連のトレースを格納する配列
+            if (latestTsunamiInfo && latestTsunamiInfo.areas && latestTsunamiInfo.areas.length > 0 && !latestTsunamiInfo.cancelled &&
+                tsunamiAreaGeoJson && tsunamiAreaGeoJson.features) {
+
+                const EARTH_RADIUS_KM = 6371;
+                const TSUNAMI_SPHERE_RADIUS_KM = EARTH_RADIUS_KM - 5; // 地球より少し内側にプロット
+
+                // 1. 警報状況データをマップ化 (区域名 -> {grade, immediate})
+                const tsunamiStatusMap = new Map();
+                latestTsunamiInfo.areas.forEach(area => {
+                    if (area.regions && area.regions.length > 0) {
+                        area.regions.forEach(region => {
+                             // APIの区域名をキーとして状態を保存
+                             tsunamiStatusMap.set(region.name, {
+                                 grade: region.grade,
+                                 immediate: region.immediate
+                             });
+                        });
+                    }
+                });
+
+                // 2. GeoJSONのポリゴンをループし、警報が出てるものだけを描画
+                const tsunamiX = [];
+                const tsunamiY = [];
+                const tsunamiZ = [];
+                const tsunamiColors = [];
+                const tsunamiTexts = [];
+                const tsunamiIndices = []; // i, j, k 形式のインデックスを格納
+
+                let vertexIndex = 0; // mesh3d 用の頂点インデックス
+                tsunamiAreaGeoJson.features.forEach((feature, featureIndex) => {
+                    const regionName = feature.properties.name; // GeoJSONの区域名
+                    const status = tsunamiStatusMap.get(regionName); // 警報状況を取得
+
+                    if (status) { // 警報/注意報が発表されている場合
+                        const coordinates = feature.geometry.coordinates;
+                        const grade = status.grade;
+                        const immediate = status.immediate;
+
+                        // Polygon (穴がないと仮定)
+                        if (feature.geometry.type === "Polygon" && coordinates.length > 0) {
+                            const outerRing = coordinates[0]; // 外側のリング
+
+                            const ringX = [];
+                            const ringY = [];
+                            const ringZ = [];
+
+                            // 座標を球面3Dに変換
+                            outerRing.forEach(coord => {
+                                const lon = coord[0];
+                                const lat = coord[1];
+                                const lonRad = lon * Math.PI / 180;
+                                const latRad = lat * Math.PI / 180;
+
+                                const x = TSUNAMI_SPHERE_RADIUS_KM * Math.cos(latRad) * Math.cos(lonRad);
+                                const y = TSUNAMI_SPHERE_RADIUS_KM * Math.cos(latRad) * Math.sin(lonRad);
+                                const z = TSUNAMI_SPHERE_RADIUS_KM * Math.sin(latRad);
+
+                                // Plotly の軸定義に合わせる (X=経度, Y=緯度, Z=奥行き)
+                                tsunamiX.push(x);
+                                tsunamiY.push(y);
+                                tsunamiZ.push(z);
+                                ringX.push(x);
+                                ringY.push(y);
+                                ringZ.push(z);
+                            });
+
+                            // 頂点数を取得
+                            const numVertices = ringX.length;
+
+                            // i, j, k インデックスを生成 (簡単な方法: 扇状に三角形分割)
+                            // 注意: これは単純な近似です。複雑なポリゴンには delaunay triangulation などが適します。
+                            if (numVertices >= 3) {
+                                for (let i = 1; i < numVertices - 1; i++) {
+                                    tsunamiIndices.push(vertexIndex);       // i
+                                    tsunamiIndices.push(vertexIndex + i);   // j
+                                    tsunamiIndices.push(vertexIndex + i + 1); // k
+                                }
+                            }
+
+                            // 色とテキストを各頂点に割り当て
+                            const color = grade === "Warning" ? 'red' : grade === "Watch" ? 'orange' : 'yellow';
+                            const text = `${regionName}<br>警報等級: ${grade}${immediate ? ' (直ちに来襲)' : ''}`;
+                            for (let i = 0; i < numVertices; i++) {
+                                 tsunamiColors.push(color);
+                                 tsunamiTexts.push(text);
+                            }
+
+                            // 頂点インデックスを更新
+                            vertexIndex += numVertices;
+                        }
+                        // MultiPolygon など他のタイプも必要に応じて処理
+                    }
+                });
+
+                // 津波ポリゴントレースを作成 (mesh3d を使用)
+                if (tsunamiIndices.length > 0 && tsunamiX.length > 0) {
+                    // i, j, k を分離
+                    const i_indices = [];
+                    const j_indices = [];
+                    const k_indices = [];
+                    for (let idx = 0; idx < tsunamiIndices.length; idx += 3) {
+                        i_indices.push(tsunamiIndices[idx]);
+                        j_indices.push(tsunamiIndices[idx + 1]);
+                        k_indices.push(tsunamiIndices[idx + 2]);
+                    }
+
+                    tsunamiTraces.push({
+                        type: 'mesh3d',
+                        x: tsunamiX,
+                        y: tsunamiY,
+                        z: tsunamiZ,
+                        i: i_indices,
+                        j: j_indices,
+                        k: k_indices,
+                        name: '津波警報/注意報区域',
+                        text: tsunamiTexts, // 各頂点のテキスト
+                        hoverinfo: 'text',
+                        color: tsunamiColors, // 各面の色 (一部のPlotlyバージョンでは facecolor が必要)
+                        opacity: 0.4, // 半透明にして下の地図を見せる
+                        showscale: false, // 色スケールバーを非表示
+                        // facecolor を使用する場合 (頂点色から面色を設定)
+                        // facecolor: tsunamiColors.slice(0, i_indices.length), // 各面の色を指定する方法も検討
+                    });
+                    console.log(`津波情報ポリゴントレースを作成しました。面数: ${i_indices.length}`);
+                } else {
+                     console.log("表示する津波区域ポリゴンデータがありません。");
+                }
+            } else {
+                 console.log("津波情報または区域GeoJSONデータがありません。");
+            }
+            // --- 津波トレース生成のためのコード追加終了 ---
+
       // --- allData のチェック (変更なし) ---
       if (!Array.isArray(allData)) {
         console.warn("球面グラフ描画: allData が配列ではありません。");
@@ -3979,9 +4138,9 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
           text: indices.map((i) => hoverTexts[i]),
           hoverinfo: "text",
           marker: {
-            size: indices.map((i) => Math.max(2, (2 + magnitudes[i]) * 2)),
+            size: indices.map((i) => Math.max(2, (5 + Math.pow(magnitudes[i], 1.7)))),
             sizemode: "diameter",
-            opacity: 1,
+            opacity: 0.8,
           },
         };
       });
@@ -4085,7 +4244,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
       let worldMapTrace = null;
       try {
         // ✅ 修正: Datamaps の world.json を使用
-        const WORLD_MAP_URL = "custom.geomedium.json";
+        const WORLD_MAP_URL = "custom.geohigh.json";
         console.log("世界地図データ (Datamaps) を取得します...", WORLD_MAP_URL);
         const response = await fetch(WORLD_MAP_URL);
         if (!response.ok) {
@@ -4213,11 +4372,13 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
         ...(worldMapTrace ? [worldMapTrace] : []),
         ...(plateBoundariesTrace ? [plateBoundariesTrace] : []),
         ...earthquakeTraces, // 地震データ
+                        ...tsunamiTraces // <-- 追加: 津波トレース
+
       ];
 
       // 5. レイアウト (タイトル変更)
       const layout = {
-        title: "地震データ 3D 球面プロット (世界地図/プレート境界)",
+        title: "地震データ 3D 球面プロット (世界地図/プレート境界/津波情報)",
         font: { color: "white" },
         paper_bgcolor: "black", // グラフ全体の背景色
         plot_bgcolor: "black", // プロット領域の背景色
@@ -4337,7 +4498,13 @@ async function fetchTsunamiData() {
           : area.grade === "Watch"
           ? "tsunami-grade-watch"
           : "";
-      const immediateText = area.immediate ? " (直ちに来襲)" : "";
+      const gradeitem =
+        area.grade === "Warning"
+          ? "tsunami-item-Warning"
+          : area.grade === "Watch"
+          ? "tsunami-item-Watch"
+          : area.grade;
+      const immediateText = area.immediate ? " (すぐ来る)" : "";
       const firstHeightCondition = area.firstHeight?.condition || "情報なし";
       const firstHeightTime = area.firstHeight?.arrivalTime
         ? ` (${new Date(area.firstHeight.arrivalTime).toLocaleTimeString(
@@ -4348,7 +4515,7 @@ async function fetchTsunamiData() {
       const maxHeightDescription = area.maxHeight?.description || "情報なし";
 
       htmlContent += `
-                            <div class="tsunami-item">
+                            <div class="${gradeitem}">
                                 <div class="tsunami-area-name">${area.name}</div>
                                 <p class="tsunami-grade ${gradeClass}">${gradeText}${immediateText}</p>
                                 <p class="tsunami-height">第1波到達予測: ${firstHeightCondition}${firstHeightTime}</p>
@@ -4367,7 +4534,114 @@ async function fetchTsunamiData() {
 
 // 手動更新ボタン
 refreshBtn.addEventListener("click", fetchTsunamiData);
+// --- 新規関数: 津波区域GeoJSONデータを取得 ---
+async function fetchTsunamiAreaGeoJson() {
+    try {
+        const response = await fetch("https://www.jma.go.jp/bosai/common/const/geojson/tsunami.json");
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        tsunamiAreaGeoJsonData = await response.json();
+        console.log("津波区域GeoJSONデータを取得しました。");
+    } catch (error) {
+        console.error("津波区域GeoJSONデータの取得エラー:", error);
+        tsunamiAreaGeoJsonData = null; // エラー時は null に設定
+    }
+}
+// --- 新規関数: 地図上に津波レイヤーを追加/更新 ---
+function updateTsunamiLayerOnMap() {
+    // 既存の津波レイヤーがあれば削除
+    if (tsunamiLayer && map.hasLayer(tsunamiLayer)) {
+        map.removeLayer(tsunamiLayer);
+        tsunamiLayer = null;
+        console.log("既存の津波レイヤーを削除しました。");
+    }
 
+    // データが揃っているかチェック
+    if (!tsunamiAreaGeoJsonData || !latestTsunamiInfo || latestTsunamiInfo.cancelled || !latestTsunamiInfo.areas) {
+        console.log("津波レイヤーを表示するデータがありません。");
+        return;
+    }
+
+    // 1. 警報状況データをマップ化 (区域名 -> {grade, immediate})
+    const tsunamiStatusMap = new Map();
+    latestTsunamiInfo.areas.forEach(area => {
+        if (area.regions && area.regions.length > 0) {
+            area.regions.forEach(region => {
+                 // APIの区域名をキーとして状態を保存
+                 tsunamiStatusMap.set(region.name, {
+                     grade: region.grade,
+                     immediate: region.immediate
+                 });
+            });
+        }
+    });
+
+    // 2. GeoJSONデータを元に、スタイル付きのLeaflet GeoJSONレイヤーを作成
+    try {
+        tsunamiLayer = L.geoJSON(tsunamiAreaGeoJsonData, {
+            style: function(feature) {
+                const regionName = feature.properties.name; // GeoJSONの区域名
+                const status = tsunamiStatusMap.get(regionName); // 警報状況を取得
+
+                if (status) {
+                    // 警報/注意報が発表されている区域
+                    let fillColor = 'gray'; // デフォルト色
+                    let opacity = 0.0; // デフォルトは非表示
+                    if (status.grade === "Warning") {
+                        fillColor = 'red';
+                        opacity = 0.5;
+                    } else if (status.grade === "Watch") {
+                        fillColor = 'orange';
+                        opacity = 0.5;
+                    } else {
+                        // その他の状態 (例: "Forecast", "None" など)
+                        fillColor = 'yellow';
+                        opacity = 0.3;
+                    }
+                    return {
+                        fillColor: fillColor,
+                        color: "black", // 境界線の色
+                        weight: 1, // 境界線の太さ
+                        opacity: 0.7, // 境界線の透明度
+                        fillOpacity: opacity // 塗りつぶしの透明度
+                    };
+                } else {
+                    // 警報が出ていない区域は非表示または薄く表示
+                    return {
+                        fillColor: 'gray',
+                        color: "black",
+                        weight: 0.5,
+                        opacity: 0.2,
+                        fillOpacity: 0.0 // 完全に透明
+                    };
+                }
+            },
+            onEachFeature: function(feature, layer) {
+                const regionName = feature.properties.name;
+                const status = tsunamiStatusMap.get(regionName);
+                if (status) {
+                    // ポップアップやツールチップを追加 (オプション)
+                    let popupContent = `<b>${regionName}</b><br>警報等級: ${status.grade}`;
+                    if (status.immediate) {
+                       popupContent += "<br><b>直ちに来襲</b>";
+                    }
+                    layer.bindPopup(popupContent);
+                    // layer.bindTooltip(regionName); // ツールチップも可能
+                }
+            }
+        });
+
+        // 3. 地図にレイヤーを追加
+        if (tsunamiLayer) {
+            tsunamiLayer.addTo(map);
+            console.log("津波レイヤーを地図に追加しました。");
+        }
+
+    } catch (error) {
+        console.error("津波GeoJSONレイヤーの作成または追加中にエラーが発生しました:", error);
+    }
+}
 // 自動更新機能
 function startAutoRefresh() {
   if (autoRefreshInterval) clearInterval(autoRefreshInterval);
