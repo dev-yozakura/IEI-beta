@@ -522,20 +522,31 @@ function updateEmscEqList(data) {
       (data.properties && data.properties.type === "Feature"))
   ) {
     const props = data.properties;
+const date = new Date(props.time);
+// JST（UTC+9）に変換
+const jstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+
+// 年/月/日 時:分:秒 形式にフォーマット
+const formattedtime = jstDate.toISOString()
+  .replace(/T/, ' ')      // Tをスペースに置換
+  .replace(/\..+Z/, '')   // ミリ秒とZを削除
+  .replace(/-/g, '/');    // -を/に置換
 
     // 統一構造に変換 (ID と source を追加)
     const convertedData = {
       id: data.id, // ✅ IDを保持
       source: "emsc", // ✅ EMSC ソースを明示
+      auth: props.auth, 
       displayType: "eq", // ✅ 表示タイプを明示
       // properties から必要な情報を抽出・変換
-      time: props.time, // 発生時刻
+      time: formattedtime, // 発生時刻
       updateTime: props.lastupdate, // 最終更新時刻
       location: props.flynn_region || props.region || "情報なし", // 地域
       magnitude:
         props.mag !== undefined && props.mag !== null
           ? props.mag.toFixed(1)
           : "情報なし", // マグニチュード
+      magtype: props.magtype || "M", // マグニチュードタイプ
       depth:
         props.depth !== undefined && props.depth !== null
           ? props.depth.toFixed(1)
@@ -729,6 +740,13 @@ function connectIcl() {
 }
 // 中国地震局（CEA）表示更新
 function updateCeaDisplay(data) {
+  // 関数の冒頭付近で変換
+let utcShockTimeObj = null;
+let displayShockTimeStr = "日時不明";
+if (data && data.shockTime) {
+    utcShockTimeObj = parseLocalTimeToUTCDate(data.shockTime, 8); // 中国時間 (UTC+8)
+    displayShockTimeStr = utcShockTimeObj ? formatUTCDateToJSTString(utcShockTimeObj) : "日時不明";
+}
   ceaList.innerHTML = "";
 
   if (!data) {
@@ -741,7 +759,7 @@ function updateCeaDisplay(data) {
   item.innerHTML = `
         <div class="earthquake-info">
             <strong>地震情報（CEA）</strong><br>
-            <span class="time">発生時刻: ${data.shockTime}</span><br>
+            <span class="time">発生時刻: ${displayShockTimeStr}</span><br>
             <span class="location">震源地: ${data.placeName}</span><br>
             <span>マグニチュード: ${data.magnitude}</span><br>
             <span>最大烈度: ${getIntersityLabel(data.epiIntensity)}</span><br>
@@ -754,6 +772,13 @@ function updateCeaDisplay(data) {
 }
 // 成都高新防災減災研究所（ICL）表示更新（公開ソフトウェアでの使用禁止）
 function updateIclDisplay(data) {
+  // 関数の冒頭付近で変換
+let utcShockTimeObj = null;
+let displayShockTimeStr = "日時不明";
+if (data && data.shockTime) {
+    utcShockTimeObj = parseLocalTimeToUTCDate(data.shockTime, 8); // 中国時間 (UTC+8)
+    displayShockTimeStr = utcShockTimeObj ? formatUTCDateToJSTString(utcShockTimeObj) : "日時不明";
+}
   iclList.innerHTML = "";
 
   if (!data) {
@@ -766,7 +791,7 @@ function updateIclDisplay(data) {
   item.innerHTML = `
         <div class="earthquake-info">
             <strong>地震情報（ICL）</strong><br>
-            <span class="time">発生時刻: ${data.shockTime}</span><br>
+            <span class="time">発生時刻: ${displayShockTimeStr}</span><br>
             <span class="time">発表時刻: ${data.updateTime}</span><br>
             <span class="location">震源地: ${data.placeName}</span><br>
             <span>マグニチュード: ${data.magnitude}</span><br>
@@ -850,7 +875,15 @@ async function fetchUsgsData() {
         // マグニチュードの変換
         const magnitude =
           props.mag !== undefined ? props.mag.toFixed(2) : "情報なし";
-
+const cdi = props.cdi || "情報なし"; // 最大震度（CDI）
+const mmi = props.mmi || "情報なし"; // 最大震度（MMI）
+if (cdi >= mmi) {
+          props.intensity = cdi; // CDIがMMI以上の場合はCDIを使用
+        } else if (cdi < mmi) {
+          props.intensity = mmi; // CDIがMMI未満の場合は推定震度" + mmi; // MMIを使用
+} else {
+          props.intensity = null; // どちらも情報なしの場合は"情報なし"を使用
+}
         // 統一構造に変換
         combinedData.usgsData.push({
           type: "usgs",
@@ -859,6 +892,8 @@ async function fetchUsgsData() {
           updateTime: updateTime.toLocaleString(),
           location: props.place,
           magnitude: magnitude,
+          magtype: props.magType || "M", // マグニチュードタイプ
+          intensity: props.intensity || "情報なし", // 最大震度（CDI または MMI）
           depth: depth,
           lat: lat,
           lng: lon,
@@ -1244,13 +1279,15 @@ function getIntersityLabel(intensity) {
 
     // 小数値の場合はlevel-5.5などの形式
     if (isDecimal) {
-      level = `level-${intensity.toFixed(1)}`;
-      text = intensity.toFixed(1);
+      level = `level-${intensity.toFixed(0)}`;
+      text = intensity.toFixed(2);
     } else {
       level = `level-${Math.floor(intensity)}`;
       text = Math.floor(intensity).toString();
     }
   } else {
+    //level = "";
+    text = "不明";
     return "";
   }
 
@@ -1340,6 +1377,7 @@ function getIntersityLabel_j(intensity) {
       text = Math.floor(intensity).toString();
     }
   } else {
+  
     return "";
   }
 
@@ -1783,12 +1821,13 @@ function updateCombinedDisplay() {
 
     // USGS 地震情報
     if (item.source === "usgs" && item.displayType === "eq") {
-      html += `<h3>${item.Title}</h3>`;
+      html += `<h3>${item.magtype} ${item.magnitude} - ${item.location}</h3>`;
+      //html += `<h3>${item.Title}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
       //html += `<p class="time">最終更新: ${item.updateTime}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
-
+html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
       html += `<p>深さ: ${item.depth} km</p>`;
       // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: USGS</p>`;
@@ -1889,7 +1928,7 @@ function updateCombinedDisplay() {
       }
     }
     // JMA地震情報リスト表示
-    else if (item.type === "automatic" || item.type === "reviewed") {
+    else if (item.type === "automatic") {
       if (item.MaxIntensity) {
         html += `<h3>${item.magnitude}${item.location}</h3>`;
       } else if (item.intensity) {
@@ -1969,30 +2008,49 @@ function updateCombinedDisplay() {
     }
 
     // 中国地震台網 地震情報
-    else if (item.type === "cenc_eqlist") {
-      html += `<h3>${item.location}</h3>`;
-      html += `<p class="time">発生時刻: ${item.time}</p>`;
-      html += `<p>マグニチュード: ${item.magnitude}</p>`;
-      html += `<p>最大烈度: ${getIntersityLabel(item.intensity)}</p>`;
-      html += `<p class="source">情報源: 中国地震台網</p>`;
+    else if (item.type === "reviewed") {
+      let utcShockTimeObj = null;
+let displayShockTimeStr = "日時不明";
+if (item && item.time) {
+    utcShockTimeObj = parseLocalTimeToUTCDate(item.time, 8); // 中国時間 (UTC+8)
+    displayShockTimeStr = utcShockTimeObj ? formatUTCDateToJSTString(utcShockTimeObj) : "日時不明";
+}
+      if (item.MaxIntensity) {
+        html += `<h3>${item.magnitude}${item.location}</h3>`;
+      } else if (item.intensity) {
+        html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
+      }
+      html += `<p class="">発生時刻: ${displayShockTimeStr}</p>`;
+      // html += `<p class="location">震源地: ${item.location}</p>`;
+      //html += `<p>マグニチュード: ${item.magnitude}</p>`;
+
+      // 震度表示
+      if (item.shindo) {
+        html += `<p>最大震度: ${getIntersityLabel_j(item.shindo)}</p>`;
+        html += `<p class="source">情報源: 日本気象庁</p>`;
+      } else if (item.intensity) {
+        html += `<p>最大烈度: ${getIntersityLabel(item.intensity)}</p>`;
+        html += `<p>深さ: ${item.depth || "情報なし"} km</p>`;
+        html += `<p class="source">情報源: 中国地震台網</p>`;
+      }
     }
 
     // EMSC 地震情報リスト
     else if (item.source === "emsc" && item.displayType === "eq") {
       // <-- 新しい条件: source と displayType をチェック
       // updateEmscEqList で変換された統一構造のプロパティを使用
-      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`; // <-- item.Title, item.location
+      html += `<h3>${item.magtype} ${item.magnitude} - ${item.location}</h3>`; // <-- item.Title, item.location
       html += `<p class="time">発生時刻: ${item.time || "情報なし"}</p>`; // <-- item.time
       html += `<p>深さ: ${item.depth || "情報なし"} km</p>`; // <-- item.depth
       // 緯度経度を表示したい場合は以下を追加
       // html += `<p>緯度: ${item.lat || "情報なし"}, 経度: ${item.lng || "情報なし"}</p>`; // <-- item.lat, item.lng
-      html += `<p class="source">情報源: EMSC</p>`; // <-- item.source を使うことも可能: `情報源: ${item.source.toUpperCase()}`
+      html += `<p class="source">情報源: EMSC (${item.auth || ""})</p>`; // <-- item.source を使うことも可能: `情報源: ${item.source.toUpperCase()}`
     }
 
     //jmaHypoData
     else if (item.source === "jma_geojson") {
       // html += `<h3>${item.Title}</h3>`;
-      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
+      html += `<h3>M${item.magtype} ${item.magnitude} - ${item.location}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
       html += `<p>深さ: ${item.depth} km</p>`;
       html += `<p class="source">情報源: 気象庁 GeoJSON</p>`;
@@ -3492,6 +3550,7 @@ async function fetchJmaHypoData(daysBack = 7) {
               // time_full: props.origin_time, // 必要に応じて追加
               location: props.place || "不明",
               magnitude: props.mag,
+              magtype: props.mj || "", // マグニチュードの種類
               depth: props.dep, // kmに変換
               lat: coords[1],
               lng: coords[0],
@@ -4675,3 +4734,92 @@ startAutoRefresh();
 // DOMContentLoaded内で tab1_1 が最初からアクティブなら取得
 // ここではタブ切り替えイベントで処理するので、初期は不要
 // fetchTsunamiData(); // 最初から tab1_1 を表示する場合は有効化
+function parseLocalTimeToUTCDate(dateTimeStr, offsetHours = 8) {
+    // 入力チェック
+    if (!dateTimeStr || typeof dateTimeStr !== 'string') {
+        console.warn("parseLocalTimeToUTCDate: 無効な日時文字列です:", dateTimeStr);
+        return null;
+    }
+
+    // 文字列を年、月、日、時、分、秒に分割 (例: "2025-04-05 14:30:00")
+    const parts = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (!parts) {
+         // パターンが一致しない場合、ISO形式や他の形式を試すことも可能
+         // ここでは簡略化のため、失敗として扱う
+         console.warn("parseLocalTimeToUTCDate: 日時文字列の形式が正しくありません:", dateTimeStr);
+         return null;
+    }
+
+    // Dateコンストラクタは月が0始まりなので、1引く
+    // Date.UTC は引数がUTC時刻を表す値を期待するため、オフセットを引いて調整
+    const utcDate = new Date(Date.UTC(
+        parseInt(parts[1], 10), // year
+        parseInt(parts[2], 10) - 1, // month (0-11)
+        parseInt(parts[3], 10), // day
+        parseInt(parts[4], 10) - offsetHours, // hour (UTCに変換)
+        parseInt(parts[5], 10), // minute
+        parseInt(parts[6], 10)  // second
+    ));
+
+    // 結果が有効な日付かチェック
+    if (isNaN(utcDate.getTime())) {
+         console.warn("parseLocalTimeToUTCDate: Dateオブジェクトの生成に失敗しました:", dateTimeStr);
+         return null;
+    }
+
+    return utcDate;
+}
+function formatUTCDateToJSTString(utcDate) {
+    if (!utcDate || isNaN(utcDate.getTime())) {
+         console.warn("formatUTCDateToJSTString: 無効なDateオブジェクトです:", utcDate);
+         return "日時不明";
+    }
+    // toLocaleString にタイムゾーンを明示的に指定
+    return utcDate.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+    // もしくは、カスタムフォーマットを使用したい場合は formatJmaXmlTime のような関数を流用・修正
+    // return `${utcDate.getUTCFullYear()}/${String(utcDate.getUTCMonth() + 1).padStart(2, "0")}/${String(utcDate.getUTCDate()).padStart(2, "0")} ${String(utcDate.getUTCHours() + 9).padStart(2, "0")}:${String(utcDate.getUTCMinutes()).padStart(2, "0")}:${String(utcDate.getUTCSeconds()).padStart(2, "0")}`;
+}
+function parseBmkgWibTimeToUTCDate(wibDateTimeStr) {
+    if (!wibDateTimeStr || typeof wibDateTimeStr !== 'string') {
+        console.warn("parseBmkgWibTimeToUTCDate: 無効な日時文字列です:", wibDateTimeStr);
+        return null;
+    }
+
+    // 月名のマッピング (インドネシア語 -> 英語)
+    const monthMap = {
+        "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "Mei": 4, "Jun": 5,
+        "Jul": 6, "Agu": 7, "Sep": 8, "Okt": 9, "Nov": 10, "Des": 11
+    };
+
+    // 正規表現で日時文字列を分解
+    // 例: "01 Agu 2025 11:11:15"
+    const parts = wibDateTimeStr.match(/^(\d{2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (!parts) {
+        console.warn("parseBmkgWibTimeToUTCDate: 日時文字列の形式が正しくありません:", wibDateTimeStr);
+        return null;
+    }
+
+    const day = parseInt(parts[1], 10);
+    const monthAbbr = parts[2];
+    const year = parseInt(parts[3], 10);
+    const hours = parseInt(parts[4], 10);
+    const minutes = parseInt(parts[5], 10);
+    const seconds = parseInt(parts[6], 10);
+
+    const monthIndex = monthMap[monthAbbr];
+    if (monthIndex === undefined) {
+        console.warn("parseBmkgWibTimeToUTCDate: 無効な月の略称です:", monthAbbr);
+        return null;
+    }
+
+    // WIB (UTC+7) を考慮してUTC Dateオブジェクトを作成
+    // Date.UTC は引数がUTC時刻を表す値を期待するため、WIB時刻から7時間を引く
+    const utcDate = new Date(Date.UTC(year, monthIndex, day, hours - 7, minutes, seconds));
+
+    if (isNaN(utcDate.getTime())) {
+        console.warn("parseBmkgWibTimeToUTCDate: Dateオブジェクトの生成に失敗しました:", wibDateTimeStr);
+        return null;
+    }
+
+    return utcDate;
+}
