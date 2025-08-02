@@ -1805,7 +1805,9 @@ function updateCombinedDisplay() {
       //html += `<p class="time">最終更新: ${item.updateTime}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
+      if (item.intensity !== "情報なし") {
       html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
+      }
       html += `<p>深さ: ${item.depth} km</p>`;
       // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: USGS</p>`;
