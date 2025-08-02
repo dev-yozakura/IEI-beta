@@ -19,6 +19,7 @@ let combinedData = {
   usgsData: [],
   bmkgData: [],
   bmkg_M5Data: [],
+  saData: [],
 };
 
 let markerGroup = null; // マーカーのグループを保持する変数
@@ -324,6 +325,7 @@ let connections = {
   emscEq: false,
   cwaEq: false,
   cwaEq_tiny: false,
+  sa: false, // ShakeAlert
 };
 
 // 最終更新時刻
@@ -358,6 +360,7 @@ const sourceCWA = document.getElementById("sourceCWA");
 const sourceCWA_tiny = document.getElementById("sourceCWA_tiny");
 const sourceJmaEqList = document.getElementById("sourceJmaEqList");
 const sourceJmaHypo = document.getElementById("sourceJmaHypo");
+const sourceSA = document.getElementById("sourceSA");
 
 const intervalInput = document.getElementById("intervalInput");
 const startButton = document.getElementById("startButton");
@@ -421,6 +424,7 @@ let iclEewWs = null;
 let emscEqWs = null;
 let cwaEqWs = null;
 let cwaEqWs_tiny = null;
+let saWs = null; // ShakeAlert WebSocket
 
 // 中国地震局（CEA）用変数
 let ceaWs = null;
@@ -522,21 +526,22 @@ function updateEmscEqList(data) {
       (data.properties && data.properties.type === "Feature"))
   ) {
     const props = data.properties;
-const date = new Date(props.time);
-// JST（UTC+9）に変換
-const jstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+    const date = new Date(props.time);
+    // JST（UTC+9）に変換
+    const jstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
 
-// 年/月/日 時:分:秒 形式にフォーマット
-const formattedtime = jstDate.toISOString()
-  .replace(/T/, ' ')      // Tをスペースに置換
-  .replace(/\..+Z/, '')   // ミリ秒とZを削除
-  .replace(/-/g, '/');    // -を/に置換
+    // 年/月/日 時:分:秒 形式にフォーマット
+    const formattedtime = jstDate
+      .toISOString()
+      .replace(/T/, " ") // Tをスペースに置換
+      .replace(/\..+Z/, "") // ミリ秒とZを削除
+      .replace(/-/g, "/"); // -を/に置換
 
     // 統一構造に変換 (ID と source を追加)
     const convertedData = {
       id: data.id, // ✅ IDを保持
       source: "emsc", // ✅ EMSC ソースを明示
-      auth: props.auth, 
+      auth: props.auth,
       displayType: "eq", // ✅ 表示タイプを明示
       // properties から必要な情報を抽出・変換
       time: formattedtime, // 発生時刻
@@ -741,12 +746,14 @@ function connectIcl() {
 // 中国地震局（CEA）表示更新
 function updateCeaDisplay(data) {
   // 関数の冒頭付近で変換
-let utcShockTimeObj = null;
-let displayShockTimeStr = "日時不明";
-if (data && data.shockTime) {
+  let utcShockTimeObj = null;
+  let displayShockTimeStr = "日時不明";
+  if (data && data.shockTime) {
     utcShockTimeObj = parseLocalTimeToUTCDate(data.shockTime, 8); // 中国時間 (UTC+8)
-    displayShockTimeStr = utcShockTimeObj ? formatUTCDateToJSTString(utcShockTimeObj) : "日時不明";
-}
+    displayShockTimeStr = utcShockTimeObj
+      ? formatUTCDateToJSTString(utcShockTimeObj)
+      : "日時不明";
+  }
   ceaList.innerHTML = "";
 
   if (!data) {
@@ -773,12 +780,14 @@ if (data && data.shockTime) {
 // 成都高新防災減災研究所（ICL）表示更新（公開ソフトウェアでの使用禁止）
 function updateIclDisplay(data) {
   // 関数の冒頭付近で変換
-let utcShockTimeObj = null;
-let displayShockTimeStr = "日時不明";
-if (data && data.shockTime) {
+  let utcShockTimeObj = null;
+  let displayShockTimeStr = "日時不明";
+  if (data && data.shockTime) {
     utcShockTimeObj = parseLocalTimeToUTCDate(data.shockTime, 8); // 中国時間 (UTC+8)
-    displayShockTimeStr = utcShockTimeObj ? formatUTCDateToJSTString(utcShockTimeObj) : "日時不明";
-}
+    displayShockTimeStr = utcShockTimeObj
+      ? formatUTCDateToJSTString(utcShockTimeObj)
+      : "日時不明";
+  }
   iclList.innerHTML = "";
 
   if (!data) {
@@ -812,6 +821,7 @@ if (data && data.shockTime) {
     `;
   iclList.appendChild(item);
 }
+
 // USGS 地震情報取得関数
 async function fetchUsgsData() {
   const usgssetting = document.getElementById("usgssetting").value;
@@ -875,15 +885,15 @@ async function fetchUsgsData() {
         // マグニチュードの変換
         const magnitude =
           props.mag !== undefined ? props.mag.toFixed(2) : "情報なし";
-const cdi = props.cdi || "情報なし"; // 最大震度（CDI）
-const mmi = props.mmi || "情報なし"; // 最大震度（MMI）
-if (cdi >= mmi) {
+        const cdi = props.cdi || "情報なし"; // 最大震度（CDI）
+        const mmi = props.mmi || "情報なし"; // 最大震度（MMI）
+        if (cdi >= mmi) {
           props.intensity = cdi; // CDIがMMI以上の場合はCDIを使用
         } else if (cdi < mmi) {
           props.intensity = mmi; // CDIがMMI未満の場合は推定震度" + mmi; // MMIを使用
-} else {
+        } else {
           props.intensity = null; // どちらも情報なしの場合は"情報なし"を使用
-}
+        }
         // 統一構造に変換
         combinedData.usgsData.push({
           type: "usgs",
@@ -1377,7 +1387,6 @@ function getIntersityLabel_j(intensity) {
       text = Math.floor(intensity).toString();
     }
   } else {
-  
     return "";
   }
 
@@ -1559,6 +1568,7 @@ function updateCombinedDisplay() {
   const showUSGS = sourceUSGS?.checked ?? false; // ✅ 新しいチェックボックス
   const showCWA = sourceCWA?.checked; // ✅ 新しいチェックボックス
   const showCWA_Tiny = sourceCWA_tiny?.checked; // ✅ 新しいチェックボックス
+  const showSA = sourceSA?.checked; // ✅ 新しいチェックボックス
 
   // ソート条件の取得
   const sortCriteria = document.getElementById("sortCriteria").value;
@@ -1572,6 +1582,16 @@ function updateCombinedDisplay() {
     allData.push(combinedData.jmaEew);
   }
 
+  if (showSA && combinedData.saData && typeof combinedData.saData === 'object' && Object.keys(combinedData.saData).length > 0) {
+    // combinedData.saData が null/undefined でなく、オブジェクトで、かつキー（プロパティ）を持っているかチェック
+    // 必要に応じて、さらに具体的なプロパティの存在を確認する条件を追加できます
+    // 例: if (showSA && combinedData.saData && combinedData.saData.id && combinedData.saData.magnitude) { ... }
+    allData.push(combinedData.saData);
+    console.log("SA データを統合表示用 allData に追加しました:", combinedData.saData);
+} else if (showSA && (!combinedData.saData || Object.keys(combinedData.saData).length === 0)) {
+    // デバッグ用: 表示がオンになっているが、データが空の場合のログ
+   // console.log("SA データの追加をスキップしました: データが空または無効です。", combinedData.saData);
+}
   // 四川地震局 地震警報
   if (showSC && combinedData.scEew) {
     allData.push(combinedData.scEew);
@@ -1804,6 +1824,14 @@ function updateCombinedDisplay() {
 
     html += `<div class = "no-badge">No. ${index + 1}</div>`;
 
+    if (item.source === "sa") {
+      html += `<h3>${item.Title}</h3>`;
+      html += `<p class="time">発生時刻: ${item.time}</p>`;
+      //html += `<p class="location">震源地: ${item.location}</p>`;
+      //html += `<p>マグニチュード: ${item.magnitude}</p>`;
+      html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p class="source">情報源: ShakeAlert</p>`;
+    }
     // 中央気象署（台湾）(tiny含む)地震情報
     if (
       (item.source === "cwa" || item.source === "cwa_tiny") &&
@@ -1827,7 +1855,7 @@ function updateCombinedDisplay() {
       //html += `<p class="time">最終更新: ${item.updateTime}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
-html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
+      html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
       html += `<p>深さ: ${item.depth} km</p>`;
       // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: USGS</p>`;
@@ -2010,11 +2038,13 @@ html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
     // 中国地震台網 地震情報
     else if (item.type === "reviewed") {
       let utcShockTimeObj = null;
-let displayShockTimeStr = "日時不明";
-if (item && item.time) {
-    utcShockTimeObj = parseLocalTimeToUTCDate(item.time, 8); // 中国時間 (UTC+8)
-    displayShockTimeStr = utcShockTimeObj ? formatUTCDateToJSTString(utcShockTimeObj) : "日時不明";
-}
+      let displayShockTimeStr = "日時不明";
+      if (item && item.time) {
+        utcShockTimeObj = parseLocalTimeToUTCDate(item.time, 8); // 中国時間 (UTC+8)
+        displayShockTimeStr = utcShockTimeObj
+          ? formatUTCDateToJSTString(utcShockTimeObj)
+          : "日時不明";
+      }
       if (item.MaxIntensity) {
         html += `<h3>${item.magnitude}${item.location}</h3>`;
       } else if (item.intensity) {
@@ -2152,7 +2182,13 @@ sourceCWA_tiny.addEventListener("change", () => {
   updateCombinedDisplay(); // ✅ 統合表示更新
 });
 
-//jmahypoData
+// イベントリスナー（SAチェックボックス）
+sourceSA.addEventListener("change", () => {
+  if (sourceSA.checked) connectSa(); // ✅ SAデータを再取得
+  updateCombinedDisplay(); // ✅ 統合表示更新
+});
+
+// JMA Hypoデータ取得
 sourceJmaHypo.addEventListener("change", () => {
   if (sourceJmaHypo.checked) fetchJmaHypoData(HypoDate); // JMA Hypoデータを再取得
   updateCombinedDisplay(); // 統合表示更新
@@ -2236,7 +2272,23 @@ function updateCeaEewDisplay(data) {
   ceaLastUpdate = new Date();
   updateCombinedDisplay(); // 統合表示を更新
 }
+// SA データ表示更新関数
+function updateSaDisplay(data) {
+  // 表示領域が存在するか確認
+  if (!combinedData.saData) {
+    console.warn("SA データを表示する要素 (ID: saList) が見つかりません。");
+    return;
+  }
 
+  // データがなければメッセージを表示
+  if (!data) {
+    combinedData.saData.innerHTML = "<p>SA 地震情報がありません</p>";
+    return;
+  }
+ 
+
+  updateCombinedDisplay(); // 統合表示を更新
+}
 // 成都地震局 地震警報表示更新
 function updateIclEewDisplay(data) {
   const iclList = document.getElementById("iclList");
@@ -2366,7 +2418,114 @@ function connectJmaEew() {
     jmaEewWs.close();
   };
 }
+// SA WebSocket 接続関数
+function connectSa() {
+  if (saWs) {
+    console.log("既存のSA WebSocket接続を閉じます。");
+    saWs.close();
+  }
 
+  console.log("SA WebSocketに接続中...");
+  saWs = new WebSocket("wss://ws.fanstudio.tech/sa");
+
+  saWs.onopen = () => {
+    console.log("SA WebSocket 接続済み");
+    // 必要に応じて接続確認ステータスを更新するUIコードをここに追加できます
+    // 例: document.getElementById('saStatus').textContent = '接続済み';
+    // 例: document.getElementById('saStatus').className = 'status connected';
+  };
+
+  saWs.onmessage = (event) => {
+    try {
+      const fullData = JSON.parse(event.data);
+      console.log("SA データ受信:", fullData);
+
+      // Data フィールドが存在し、必要な情報を持っているか確認
+      if (fullData && fullData.Data) {
+        const data = fullData.Data;
+        // 必要に応加えてMD5チェックも可能: fullData.md5
+
+        // 受信したデータを統一構造に変換
+        const convertedData = {
+          id: data.id || `sa_${new Date(data.shockTime).getTime()}`, // 固有ID、なければ生成
+          source: "sa", // データソースを明示
+          displayType: "eq", // 表示タイプを明示
+          shockTime: data.shockTime || "不明", // 発生時刻
+          updateTime: new Date()
+            .toISOString()
+            .replace("T", " ")
+            .substring(0, 19), // 受信時刻を更新時刻として使用（必要に応じて調整）
+          location: data.placeName || "不明", // 震源地
+          magnitude:
+            data.magnitude !== undefined
+              ? parseFloat(data.magnitude).toFixed(1)
+              : "情報なし", // マグニチュード
+          // magtype: "M", // マグニチュードタイプ（元データにない場合は推定）
+          depth:
+            data.depth !== undefined
+              ? parseFloat(data.depth).toFixed(1)
+              : "情報なし", // 深さ (km)
+          lat: data.latitude !== undefined ? parseFloat(data.latitude) : null, // 緯度
+          lng: data.longitude !== undefined ? parseFloat(data.longitude) : null, // 経度
+          // intensity: "情報なし", // 最大震度（元データにない）
+          Title: `M${data.magnitude} - ${data.placeName}`, // 表示用タイトル
+          // location: data.placeName || "不明", // location フィールドも追加可能
+          time: data.shockTime || "不明", // 統合表示用 time フィールド
+        };
+
+        // 統合データオブジェクトに格納 (例: combinedData オブジェクトの saData プロパティ)
+        // ここでは単一の最新データを保持する例
+        if (typeof combinedData !== "undefined") {
+          combinedData.saData = convertedData; // 全体データに格納
+        }
+
+        // 表示を更新
+        updateSaDisplay(convertedData);
+
+        // combinedData に格納して統合表示に反映
+        if (typeof combinedData !== "undefined") {
+          // SA は単一の最新データを保持する想定 (他のAPIと同様に)
+          combinedData.saData = convertedData;
+          console.log(
+            "SA データを combinedData に格納しました:",
+            convertedData
+          );
+        } else {
+          console.warn(
+            "combinedData オブジェクトが定義されていません。SA データを格納できません。"
+          );
+        }
+
+        // 統合表示も更新
+        if (typeof updateCombinedDisplay === "function") {
+          updateCombinedDisplay();
+        }
+      } else {
+        console.log(
+          "SA データ受信しましたが、'Data' フィールドがありません。",
+          fullData
+        );
+      }
+    } catch (error) {
+      console.error("SA データ解析エラー:", error, "受信データ:", event.data);
+    }
+  };
+
+  saWs.onclose = () => {
+    console.log("SA WebSocket 切断されました");
+    // 必要に応じて接続ステータスを更新するUIコードをここに追加できます
+    // 例: document.getElementById('saStatus').textContent = '切断されました';
+    // 例: document.getElementById('saStatus').className = 'status disconnected';
+    // 再接続を試行
+    setTimeout(connectSa, 30000); // 30秒後に再接続
+  };
+
+  saWs.onerror = (error) => {
+    console.error("SA WebSocket エラー:", error);
+    // 必要に応じてエラー表示を更新するUIコードをここに追加できます
+    saWs.close();
+  };
+}
 function connectScEew() {
   if (scEewWs) scEewWs.close();
   scEewWs = new WebSocket("wss://ws-api.wolfx.jp/sc_eew");
@@ -2975,6 +3134,7 @@ fetchCwaData(); // CWA 地震情報
 fetchCwaTinyData(); // CWA Tiny 地震情報
 fetchJmaHypoData(HypoDate); // JMA Hypoデータを初期取得
 startAutoFetch(); // 自動取得開始
+connectSa(); // SA WebSocket接続開始
 
 // 初回XMLデータ取得
 initialJmaXmlFetch();
@@ -3012,14 +3172,14 @@ function initMap() {
   }).addTo(map);
   console.log("タイルレイヤーを追加しました");
 
-   // === 追加: 津波GeoJSONデータの取得 (地図初期化時) ===
-    fetchTsunamiAreaGeoJson().then(() => {
-         // 津波データ取得後、津波レイヤーを初期化 (まだ警報情報はない)
-         if (map) {
-             updateTsunamiLayerOnMap(); // 初期状態のレイヤーを追加
-         }
-    });
-    // === 追加 ここまで ===
+  // === 追加: 津波GeoJSONデータの取得 (地図初期化時) ===
+  fetchTsunamiAreaGeoJson().then(() => {
+    // 津波データ取得後、津波レイヤーを初期化 (まだ警報情報はない)
+    if (map) {
+      updateTsunamiLayerOnMap(); // 初期状態のレイヤーを追加
+    }
+  });
+  // === 追加 ここまで ===
   // 2. プレート境界をGeoJSONで追加
   fetch(
     "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json"
@@ -3153,7 +3313,7 @@ function initMapWithMarkers(map, markers) {
 
 window.addEventListener("load", function () {
   console.log("ページロード完了イベント発火");
-  
+
   // --- 修正箇所 1: tab2 の地図初期化を削除 ---
   // 以下のコードブロックをコメントアウトまたは削除します。
   /*
@@ -3179,9 +3339,9 @@ window.addEventListener("load", function () {
     */
   // --- 修正箇所 1 ここまで ---
 });
-window.addEventListener('load', async () => {
-    await fetchTsunamiAreaGeoJson();
-    // ... 他の初期化処理 ...
+window.addEventListener("load", async () => {
+  await fetchTsunamiAreaGeoJson();
+  // ... 他の初期化処理 ...
 });
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOMContentLoadedイベント発火");
@@ -3244,6 +3404,7 @@ document.addEventListener("DOMContentLoaded", function () {
     "sourceCENC",
     "sourceBMKG",
     "sourceBMKG_M5",
+    "sourceSA",
     //"sourceJmaXml",
     "sourceJmaHypo",
     "sourceUSGS",
@@ -3340,15 +3501,14 @@ document.addEventListener("DOMContentLoaded", function () {
           } else {
             console.log(
               "tab2: 地図は既に初期化されています。サイズを再計算します"
-              
             );
-              // === 追加: tab2 アクティブ時に津波レイヤーを更新 ===
-        // 津波情報が既に取得済みの場合、地図レイヤーを更新
-        if (latestTsunamiInfo && tsunamiAreaGeoJsonData) {
-             updateTsunamiLayerOnMap();
-             console.log("tab2: 津波レイヤーを更新しました。");
-        }
-        // === 追加 ここまで ===
+            // === 追加: tab2 アクティブ時に津波レイヤーを更新 ===
+            // 津波情報が既に取得済みの場合、地図レイヤーを更新
+            if (latestTsunamiInfo && tsunamiAreaGeoJsonData) {
+              updateTsunamiLayerOnMap();
+              console.log("tab2: 津波レイヤーを更新しました。");
+            }
+            // === 追加 ここまで ===
             // 地図が既に存在する場合は、サイズを再計算
             setTimeout(() => {
               if (map) {
@@ -3796,7 +3956,9 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
             text: indices.map((i) => hoverTexts[i]), // ホバーテキスト
             hoverinfo: "text",
             marker: {
-              size: indices.map((i) => Math.max(2, (5 + Math.pow(magnitudes[i], 1.7)))), // 最小サイズを設定
+              size: indices.map((i) =>
+                Math.max(2, 5 + Math.pow(magnitudes[i], 1.7))
+              ), // 最小サイズを設定
               sizemode: "diameter",
               // color: indices.map(i => depths[i]), // 色を深さに応じて変える場合
               // colorscale: 'Viridis',
@@ -3838,139 +4000,160 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
   // 非同期関数として定義
   (async () => {
     try {
-        // --- 津波トレース生成のためのコード追加開始 ---
-            let tsunamiTraces = []; // 津波関連のトレースを格納する配列
-            if (latestTsunamiInfo && latestTsunamiInfo.areas && latestTsunamiInfo.areas.length > 0 && !latestTsunamiInfo.cancelled &&
-                tsunamiAreaGeoJson && tsunamiAreaGeoJson.features) {
+      // --- 津波トレース生成のためのコード追加開始 ---
+      let tsunamiTraces = []; // 津波関連のトレースを格納する配列
+      if (
+        latestTsunamiInfo &&
+        latestTsunamiInfo.areas &&
+        latestTsunamiInfo.areas.length > 0 &&
+        !latestTsunamiInfo.cancelled &&
+        tsunamiAreaGeoJson &&
+        tsunamiAreaGeoJson.features
+      ) {
+        const EARTH_RADIUS_KM = 6371;
+        const TSUNAMI_SPHERE_RADIUS_KM = EARTH_RADIUS_KM - 5; // 地球より少し内側にプロット
 
-                const EARTH_RADIUS_KM = 6371;
-                const TSUNAMI_SPHERE_RADIUS_KM = EARTH_RADIUS_KM - 5; // 地球より少し内側にプロット
+        // 1. 警報状況データをマップ化 (区域名 -> {grade, immediate})
+        const tsunamiStatusMap = new Map();
+        latestTsunamiInfo.areas.forEach((area) => {
+          if (area.regions && area.regions.length > 0) {
+            area.regions.forEach((region) => {
+              // APIの区域名をキーとして状態を保存
+              tsunamiStatusMap.set(region.name, {
+                grade: region.grade,
+                immediate: region.immediate,
+              });
+            });
+          }
+        });
 
-                // 1. 警報状況データをマップ化 (区域名 -> {grade, immediate})
-                const tsunamiStatusMap = new Map();
-                latestTsunamiInfo.areas.forEach(area => {
-                    if (area.regions && area.regions.length > 0) {
-                        area.regions.forEach(region => {
-                             // APIの区域名をキーとして状態を保存
-                             tsunamiStatusMap.set(region.name, {
-                                 grade: region.grade,
-                                 immediate: region.immediate
-                             });
-                        });
-                    }
-                });
+        // 2. GeoJSONのポリゴンをループし、警報が出てるものだけを描画
+        const tsunamiX = [];
+        const tsunamiY = [];
+        const tsunamiZ = [];
+        const tsunamiColors = [];
+        const tsunamiTexts = [];
+        const tsunamiIndices = []; // i, j, k 形式のインデックスを格納
 
-                // 2. GeoJSONのポリゴンをループし、警報が出てるものだけを描画
-                const tsunamiX = [];
-                const tsunamiY = [];
-                const tsunamiZ = [];
-                const tsunamiColors = [];
-                const tsunamiTexts = [];
-                const tsunamiIndices = []; // i, j, k 形式のインデックスを格納
+        let vertexIndex = 0; // mesh3d 用の頂点インデックス
+        tsunamiAreaGeoJson.features.forEach((feature, featureIndex) => {
+          const regionName = feature.properties.name; // GeoJSONの区域名
+          const status = tsunamiStatusMap.get(regionName); // 警報状況を取得
 
-                let vertexIndex = 0; // mesh3d 用の頂点インデックス
-                tsunamiAreaGeoJson.features.forEach((feature, featureIndex) => {
-                    const regionName = feature.properties.name; // GeoJSONの区域名
-                    const status = tsunamiStatusMap.get(regionName); // 警報状況を取得
+          if (status) {
+            // 警報/注意報が発表されている場合
+            const coordinates = feature.geometry.coordinates;
+            const grade = status.grade;
+            const immediate = status.immediate;
 
-                    if (status) { // 警報/注意報が発表されている場合
-                        const coordinates = feature.geometry.coordinates;
-                        const grade = status.grade;
-                        const immediate = status.immediate;
+            // Polygon (穴がないと仮定)
+            if (feature.geometry.type === "Polygon" && coordinates.length > 0) {
+              const outerRing = coordinates[0]; // 外側のリング
 
-                        // Polygon (穴がないと仮定)
-                        if (feature.geometry.type === "Polygon" && coordinates.length > 0) {
-                            const outerRing = coordinates[0]; // 外側のリング
+              const ringX = [];
+              const ringY = [];
+              const ringZ = [];
 
-                            const ringX = [];
-                            const ringY = [];
-                            const ringZ = [];
+              // 座標を球面3Dに変換
+              outerRing.forEach((coord) => {
+                const lon = coord[0];
+                const lat = coord[1];
+                const lonRad = (lon * Math.PI) / 180;
+                const latRad = (lat * Math.PI) / 180;
 
-                            // 座標を球面3Dに変換
-                            outerRing.forEach(coord => {
-                                const lon = coord[0];
-                                const lat = coord[1];
-                                const lonRad = lon * Math.PI / 180;
-                                const latRad = lat * Math.PI / 180;
+                const x =
+                  TSUNAMI_SPHERE_RADIUS_KM *
+                  Math.cos(latRad) *
+                  Math.cos(lonRad);
+                const y =
+                  TSUNAMI_SPHERE_RADIUS_KM *
+                  Math.cos(latRad) *
+                  Math.sin(lonRad);
+                const z = TSUNAMI_SPHERE_RADIUS_KM * Math.sin(latRad);
 
-                                const x = TSUNAMI_SPHERE_RADIUS_KM * Math.cos(latRad) * Math.cos(lonRad);
-                                const y = TSUNAMI_SPHERE_RADIUS_KM * Math.cos(latRad) * Math.sin(lonRad);
-                                const z = TSUNAMI_SPHERE_RADIUS_KM * Math.sin(latRad);
+                // Plotly の軸定義に合わせる (X=経度, Y=緯度, Z=奥行き)
+                tsunamiX.push(x);
+                tsunamiY.push(y);
+                tsunamiZ.push(z);
+                ringX.push(x);
+                ringY.push(y);
+                ringZ.push(z);
+              });
 
-                                // Plotly の軸定義に合わせる (X=経度, Y=緯度, Z=奥行き)
-                                tsunamiX.push(x);
-                                tsunamiY.push(y);
-                                tsunamiZ.push(z);
-                                ringX.push(x);
-                                ringY.push(y);
-                                ringZ.push(z);
-                            });
+              // 頂点数を取得
+              const numVertices = ringX.length;
 
-                            // 頂点数を取得
-                            const numVertices = ringX.length;
-
-                            // i, j, k インデックスを生成 (簡単な方法: 扇状に三角形分割)
-                            // 注意: これは単純な近似です。複雑なポリゴンには delaunay triangulation などが適します。
-                            if (numVertices >= 3) {
-                                for (let i = 1; i < numVertices - 1; i++) {
-                                    tsunamiIndices.push(vertexIndex);       // i
-                                    tsunamiIndices.push(vertexIndex + i);   // j
-                                    tsunamiIndices.push(vertexIndex + i + 1); // k
-                                }
-                            }
-
-                            // 色とテキストを各頂点に割り当て
-                            const color = grade === "Warning" ? 'red' : grade === "Watch" ? 'orange' : 'yellow';
-                            const text = `${regionName}<br>警報等級: ${grade}${immediate ? ' (直ちに来襲)' : ''}`;
-                            for (let i = 0; i < numVertices; i++) {
-                                 tsunamiColors.push(color);
-                                 tsunamiTexts.push(text);
-                            }
-
-                            // 頂点インデックスを更新
-                            vertexIndex += numVertices;
-                        }
-                        // MultiPolygon など他のタイプも必要に応じて処理
-                    }
-                });
-
-                // 津波ポリゴントレースを作成 (mesh3d を使用)
-                if (tsunamiIndices.length > 0 && tsunamiX.length > 0) {
-                    // i, j, k を分離
-                    const i_indices = [];
-                    const j_indices = [];
-                    const k_indices = [];
-                    for (let idx = 0; idx < tsunamiIndices.length; idx += 3) {
-                        i_indices.push(tsunamiIndices[idx]);
-                        j_indices.push(tsunamiIndices[idx + 1]);
-                        k_indices.push(tsunamiIndices[idx + 2]);
-                    }
-
-                    tsunamiTraces.push({
-                        type: 'mesh3d',
-                        x: tsunamiX,
-                        y: tsunamiY,
-                        z: tsunamiZ,
-                        i: i_indices,
-                        j: j_indices,
-                        k: k_indices,
-                        name: '津波警報/注意報区域',
-                        text: tsunamiTexts, // 各頂点のテキスト
-                        hoverinfo: 'text',
-                        color: tsunamiColors, // 各面の色 (一部のPlotlyバージョンでは facecolor が必要)
-                        opacity: 0.4, // 半透明にして下の地図を見せる
-                        showscale: false, // 色スケールバーを非表示
-                        // facecolor を使用する場合 (頂点色から面色を設定)
-                        // facecolor: tsunamiColors.slice(0, i_indices.length), // 各面の色を指定する方法も検討
-                    });
-                    console.log(`津波情報ポリゴントレースを作成しました。面数: ${i_indices.length}`);
-                } else {
-                     console.log("表示する津波区域ポリゴンデータがありません。");
+              // i, j, k インデックスを生成 (簡単な方法: 扇状に三角形分割)
+              // 注意: これは単純な近似です。複雑なポリゴンには delaunay triangulation などが適します。
+              if (numVertices >= 3) {
+                for (let i = 1; i < numVertices - 1; i++) {
+                  tsunamiIndices.push(vertexIndex); // i
+                  tsunamiIndices.push(vertexIndex + i); // j
+                  tsunamiIndices.push(vertexIndex + i + 1); // k
                 }
-            } else {
-                 console.log("津波情報または区域GeoJSONデータがありません。");
+              }
+
+              // 色とテキストを各頂点に割り当て
+              const color =
+                grade === "Warning"
+                  ? "red"
+                  : grade === "Watch"
+                  ? "orange"
+                  : "yellow";
+              const text = `${regionName}<br>警報等級: ${grade}${
+                immediate ? " (直ちに来襲)" : ""
+              }`;
+              for (let i = 0; i < numVertices; i++) {
+                tsunamiColors.push(color);
+                tsunamiTexts.push(text);
+              }
+
+              // 頂点インデックスを更新
+              vertexIndex += numVertices;
             }
-            // --- 津波トレース生成のためのコード追加終了 ---
+            // MultiPolygon など他のタイプも必要に応じて処理
+          }
+        });
+
+        // 津波ポリゴントレースを作成 (mesh3d を使用)
+        if (tsunamiIndices.length > 0 && tsunamiX.length > 0) {
+          // i, j, k を分離
+          const i_indices = [];
+          const j_indices = [];
+          const k_indices = [];
+          for (let idx = 0; idx < tsunamiIndices.length; idx += 3) {
+            i_indices.push(tsunamiIndices[idx]);
+            j_indices.push(tsunamiIndices[idx + 1]);
+            k_indices.push(tsunamiIndices[idx + 2]);
+          }
+
+          tsunamiTraces.push({
+            type: "mesh3d",
+            x: tsunamiX,
+            y: tsunamiY,
+            z: tsunamiZ,
+            i: i_indices,
+            j: j_indices,
+            k: k_indices,
+            name: "津波警報/注意報区域",
+            text: tsunamiTexts, // 各頂点のテキスト
+            hoverinfo: "text",
+            color: tsunamiColors, // 各面の色 (一部のPlotlyバージョンでは facecolor が必要)
+            opacity: 0.4, // 半透明にして下の地図を見せる
+            showscale: false, // 色スケールバーを非表示
+            // facecolor を使用する場合 (頂点色から面色を設定)
+            // facecolor: tsunamiColors.slice(0, i_indices.length), // 各面の色を指定する方法も検討
+          });
+          console.log(
+            `津波情報ポリゴントレースを作成しました。面数: ${i_indices.length}`
+          );
+        } else {
+          console.log("表示する津波区域ポリゴンデータがありません。");
+        }
+      } else {
+        console.log("津波情報または区域GeoJSONデータがありません。");
+      }
+      // --- 津波トレース生成のためのコード追加終了 ---
 
       // --- allData のチェック (変更なし) ---
       if (!Array.isArray(allData)) {
@@ -4197,7 +4380,9 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
           text: indices.map((i) => hoverTexts[i]),
           hoverinfo: "text",
           marker: {
-            size: indices.map((i) => Math.max(2, (5 + Math.pow(magnitudes[i], 1.7)))),
+            size: indices.map((i) =>
+              Math.max(2, 5 + Math.pow(magnitudes[i], 1.7))
+            ),
             sizemode: "diameter",
             opacity: 0.8,
           },
@@ -4431,8 +4616,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
         ...(worldMapTrace ? [worldMapTrace] : []),
         ...(plateBoundariesTrace ? [plateBoundariesTrace] : []),
         ...earthquakeTraces, // 地震データ
-                        ...tsunamiTraces // <-- 追加: 津波トレース
-
+        ...tsunamiTraces, // <-- 追加: 津波トレース
       ];
 
       // 5. レイアウト (タイトル変更)
@@ -4595,111 +4779,120 @@ async function fetchTsunamiData() {
 refreshBtn.addEventListener("click", fetchTsunamiData);
 // --- 新規関数: 津波区域GeoJSONデータを取得 ---
 async function fetchTsunamiAreaGeoJson() {
-    try {
-        const response = await fetch("https://www.jma.go.jp/bosai/common/const/geojson/tsunami.json");
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        tsunamiAreaGeoJsonData = await response.json();
-        console.log("津波区域GeoJSONデータを取得しました。");
-    } catch (error) {
-        console.error("津波区域GeoJSONデータの取得エラー:", error);
-        tsunamiAreaGeoJsonData = null; // エラー時は null に設定
+  try {
+    const response = await fetch(
+      "https://www.jma.go.jp/bosai/common/const/geojson/tsunami.json"
+    );
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    tsunamiAreaGeoJsonData = await response.json();
+    console.log("津波区域GeoJSONデータを取得しました。");
+  } catch (error) {
+    console.error("津波区域GeoJSONデータの取得エラー:", error);
+    tsunamiAreaGeoJsonData = null; // エラー時は null に設定
+  }
 }
 // --- 新規関数: 地図上に津波レイヤーを追加/更新 ---
 function updateTsunamiLayerOnMap() {
-    // 既存の津波レイヤーがあれば削除
-    if (tsunamiLayer && map.hasLayer(tsunamiLayer)) {
-        map.removeLayer(tsunamiLayer);
-        tsunamiLayer = null;
-        console.log("既存の津波レイヤーを削除しました。");
-    }
+  // 既存の津波レイヤーがあれば削除
+  if (tsunamiLayer && map.hasLayer(tsunamiLayer)) {
+    map.removeLayer(tsunamiLayer);
+    tsunamiLayer = null;
+    console.log("既存の津波レイヤーを削除しました。");
+  }
 
-    // データが揃っているかチェック
-    if (!tsunamiAreaGeoJsonData || !latestTsunamiInfo || latestTsunamiInfo.cancelled || !latestTsunamiInfo.areas) {
-        console.log("津波レイヤーを表示するデータがありません。");
-        return;
-    }
+  // データが揃っているかチェック
+  if (
+    !tsunamiAreaGeoJsonData ||
+    !latestTsunamiInfo ||
+    latestTsunamiInfo.cancelled ||
+    !latestTsunamiInfo.areas
+  ) {
+    console.log("津波レイヤーを表示するデータがありません。");
+    return;
+  }
 
-    // 1. 警報状況データをマップ化 (区域名 -> {grade, immediate})
-    const tsunamiStatusMap = new Map();
-    latestTsunamiInfo.areas.forEach(area => {
-        if (area.regions && area.regions.length > 0) {
-            area.regions.forEach(region => {
-                 // APIの区域名をキーとして状態を保存
-                 tsunamiStatusMap.set(region.name, {
-                     grade: region.grade,
-                     immediate: region.immediate
-                 });
-            });
+  // 1. 警報状況データをマップ化 (区域名 -> {grade, immediate})
+  const tsunamiStatusMap = new Map();
+  latestTsunamiInfo.areas.forEach((area) => {
+    if (area.regions && area.regions.length > 0) {
+      area.regions.forEach((region) => {
+        // APIの区域名をキーとして状態を保存
+        tsunamiStatusMap.set(region.name, {
+          grade: region.grade,
+          immediate: region.immediate,
+        });
+      });
+    }
+  });
+
+  // 2. GeoJSONデータを元に、スタイル付きのLeaflet GeoJSONレイヤーを作成
+  try {
+    tsunamiLayer = L.geoJSON(tsunamiAreaGeoJsonData, {
+      style: function (feature) {
+        const regionName = feature.properties.name; // GeoJSONの区域名
+        const status = tsunamiStatusMap.get(regionName); // 警報状況を取得
+
+        if (status) {
+          // 警報/注意報が発表されている区域
+          let fillColor = "gray"; // デフォルト色
+          let opacity = 0.0; // デフォルトは非表示
+          if (status.grade === "Warning") {
+            fillColor = "red";
+            opacity = 0.5;
+          } else if (status.grade === "Watch") {
+            fillColor = "orange";
+            opacity = 0.5;
+          } else {
+            // その他の状態 (例: "Forecast", "None" など)
+            fillColor = "yellow";
+            opacity = 0.3;
+          }
+          return {
+            fillColor: fillColor,
+            color: "black", // 境界線の色
+            weight: 1, // 境界線の太さ
+            opacity: 0.7, // 境界線の透明度
+            fillOpacity: opacity, // 塗りつぶしの透明度
+          };
+        } else {
+          // 警報が出ていない区域は非表示または薄く表示
+          return {
+            fillColor: "gray",
+            color: "black",
+            weight: 0.5,
+            opacity: 0.2,
+            fillOpacity: 0.0, // 完全に透明
+          };
         }
+      },
+      onEachFeature: function (feature, layer) {
+        const regionName = feature.properties.name;
+        const status = tsunamiStatusMap.get(regionName);
+        if (status) {
+          // ポップアップやツールチップを追加 (オプション)
+          let popupContent = `<b>${regionName}</b><br>警報等級: ${status.grade}`;
+          if (status.immediate) {
+            popupContent += "<br><b>直ちに来襲</b>";
+          }
+          layer.bindPopup(popupContent);
+          // layer.bindTooltip(regionName); // ツールチップも可能
+        }
+      },
     });
 
-    // 2. GeoJSONデータを元に、スタイル付きのLeaflet GeoJSONレイヤーを作成
-    try {
-        tsunamiLayer = L.geoJSON(tsunamiAreaGeoJsonData, {
-            style: function(feature) {
-                const regionName = feature.properties.name; // GeoJSONの区域名
-                const status = tsunamiStatusMap.get(regionName); // 警報状況を取得
-
-                if (status) {
-                    // 警報/注意報が発表されている区域
-                    let fillColor = 'gray'; // デフォルト色
-                    let opacity = 0.0; // デフォルトは非表示
-                    if (status.grade === "Warning") {
-                        fillColor = 'red';
-                        opacity = 0.5;
-                    } else if (status.grade === "Watch") {
-                        fillColor = 'orange';
-                        opacity = 0.5;
-                    } else {
-                        // その他の状態 (例: "Forecast", "None" など)
-                        fillColor = 'yellow';
-                        opacity = 0.3;
-                    }
-                    return {
-                        fillColor: fillColor,
-                        color: "black", // 境界線の色
-                        weight: 1, // 境界線の太さ
-                        opacity: 0.7, // 境界線の透明度
-                        fillOpacity: opacity // 塗りつぶしの透明度
-                    };
-                } else {
-                    // 警報が出ていない区域は非表示または薄く表示
-                    return {
-                        fillColor: 'gray',
-                        color: "black",
-                        weight: 0.5,
-                        opacity: 0.2,
-                        fillOpacity: 0.0 // 完全に透明
-                    };
-                }
-            },
-            onEachFeature: function(feature, layer) {
-                const regionName = feature.properties.name;
-                const status = tsunamiStatusMap.get(regionName);
-                if (status) {
-                    // ポップアップやツールチップを追加 (オプション)
-                    let popupContent = `<b>${regionName}</b><br>警報等級: ${status.grade}`;
-                    if (status.immediate) {
-                       popupContent += "<br><b>直ちに来襲</b>";
-                    }
-                    layer.bindPopup(popupContent);
-                    // layer.bindTooltip(regionName); // ツールチップも可能
-                }
-            }
-        });
-
-        // 3. 地図にレイヤーを追加
-        if (tsunamiLayer) {
-            tsunamiLayer.addTo(map);
-            console.log("津波レイヤーを地図に追加しました。");
-        }
-
-    } catch (error) {
-        console.error("津波GeoJSONレイヤーの作成または追加中にエラーが発生しました:", error);
+    // 3. 地図にレイヤーを追加
+    if (tsunamiLayer) {
+      tsunamiLayer.addTo(map);
+      console.log("津波レイヤーを地図に追加しました。");
     }
+  } catch (error) {
+    console.error(
+      "津波GeoJSONレイヤーの作成または追加中にエラーが発生しました:",
+      error
+    );
+  }
 }
 // 自動更新機能
 function startAutoRefresh() {
@@ -4735,91 +4928,127 @@ startAutoRefresh();
 // ここではタブ切り替えイベントで処理するので、初期は不要
 // fetchTsunamiData(); // 最初から tab1_1 を表示する場合は有効化
 function parseLocalTimeToUTCDate(dateTimeStr, offsetHours = 8) {
-    // 入力チェック
-    if (!dateTimeStr || typeof dateTimeStr !== 'string') {
-        console.warn("parseLocalTimeToUTCDate: 無効な日時文字列です:", dateTimeStr);
-        return null;
-    }
+  // 入力チェック
+  if (!dateTimeStr || typeof dateTimeStr !== "string") {
+    console.warn("parseLocalTimeToUTCDate: 無効な日時文字列です:", dateTimeStr);
+    return null;
+  }
 
-    // 文字列を年、月、日、時、分、秒に分割 (例: "2025-04-05 14:30:00")
-    const parts = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if (!parts) {
-         // パターンが一致しない場合、ISO形式や他の形式を試すことも可能
-         // ここでは簡略化のため、失敗として扱う
-         console.warn("parseLocalTimeToUTCDate: 日時文字列の形式が正しくありません:", dateTimeStr);
-         return null;
-    }
+  // 文字列を年、月、日、時、分、秒に分割 (例: "2025-04-05 14:30:00")
+  const parts = dateTimeStr.match(
+    /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/
+  );
+  if (!parts) {
+    // パターンが一致しない場合、ISO形式や他の形式を試すことも可能
+    // ここでは簡略化のため、失敗として扱う
+    console.warn(
+      "parseLocalTimeToUTCDate: 日時文字列の形式が正しくありません:",
+      dateTimeStr
+    );
+    return null;
+  }
 
-    // Dateコンストラクタは月が0始まりなので、1引く
-    // Date.UTC は引数がUTC時刻を表す値を期待するため、オフセットを引いて調整
-    const utcDate = new Date(Date.UTC(
-        parseInt(parts[1], 10), // year
-        parseInt(parts[2], 10) - 1, // month (0-11)
-        parseInt(parts[3], 10), // day
-        parseInt(parts[4], 10) - offsetHours, // hour (UTCに変換)
-        parseInt(parts[5], 10), // minute
-        parseInt(parts[6], 10)  // second
-    ));
+  // Dateコンストラクタは月が0始まりなので、1引く
+  // Date.UTC は引数がUTC時刻を表す値を期待するため、オフセットを引いて調整
+  const utcDate = new Date(
+    Date.UTC(
+      parseInt(parts[1], 10), // year
+      parseInt(parts[2], 10) - 1, // month (0-11)
+      parseInt(parts[3], 10), // day
+      parseInt(parts[4], 10) - offsetHours, // hour (UTCに変換)
+      parseInt(parts[5], 10), // minute
+      parseInt(parts[6], 10) // second
+    )
+  );
 
-    // 結果が有効な日付かチェック
-    if (isNaN(utcDate.getTime())) {
-         console.warn("parseLocalTimeToUTCDate: Dateオブジェクトの生成に失敗しました:", dateTimeStr);
-         return null;
-    }
+  // 結果が有効な日付かチェック
+  if (isNaN(utcDate.getTime())) {
+    console.warn(
+      "parseLocalTimeToUTCDate: Dateオブジェクトの生成に失敗しました:",
+      dateTimeStr
+    );
+    return null;
+  }
 
-    return utcDate;
+  return utcDate;
 }
 function formatUTCDateToJSTString(utcDate) {
-    if (!utcDate || isNaN(utcDate.getTime())) {
-         console.warn("formatUTCDateToJSTString: 無効なDateオブジェクトです:", utcDate);
-         return "日時不明";
-    }
-    // toLocaleString にタイムゾーンを明示的に指定
-    return utcDate.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
-    // もしくは、カスタムフォーマットを使用したい場合は formatJmaXmlTime のような関数を流用・修正
-    // return `${utcDate.getUTCFullYear()}/${String(utcDate.getUTCMonth() + 1).padStart(2, "0")}/${String(utcDate.getUTCDate()).padStart(2, "0")} ${String(utcDate.getUTCHours() + 9).padStart(2, "0")}:${String(utcDate.getUTCMinutes()).padStart(2, "0")}:${String(utcDate.getUTCSeconds()).padStart(2, "0")}`;
+  if (!utcDate || isNaN(utcDate.getTime())) {
+    console.warn(
+      "formatUTCDateToJSTString: 無効なDateオブジェクトです:",
+      utcDate
+    );
+    return "日時不明";
+  }
+  // toLocaleString にタイムゾーンを明示的に指定
+  return utcDate.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+  // もしくは、カスタムフォーマットを使用したい場合は formatJmaXmlTime のような関数を流用・修正
+  // return `${utcDate.getUTCFullYear()}/${String(utcDate.getUTCMonth() + 1).padStart(2, "0")}/${String(utcDate.getUTCDate()).padStart(2, "0")} ${String(utcDate.getUTCHours() + 9).padStart(2, "0")}:${String(utcDate.getUTCMinutes()).padStart(2, "0")}:${String(utcDate.getUTCSeconds()).padStart(2, "0")}`;
 }
 function parseBmkgWibTimeToUTCDate(wibDateTimeStr) {
-    if (!wibDateTimeStr || typeof wibDateTimeStr !== 'string') {
-        console.warn("parseBmkgWibTimeToUTCDate: 無効な日時文字列です:", wibDateTimeStr);
-        return null;
-    }
+  if (!wibDateTimeStr || typeof wibDateTimeStr !== "string") {
+    console.warn(
+      "parseBmkgWibTimeToUTCDate: 無効な日時文字列です:",
+      wibDateTimeStr
+    );
+    return null;
+  }
 
-    // 月名のマッピング (インドネシア語 -> 英語)
-    const monthMap = {
-        "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "Mei": 4, "Jun": 5,
-        "Jul": 6, "Agu": 7, "Sep": 8, "Okt": 9, "Nov": 10, "Des": 11
-    };
+  // 月名のマッピング (インドネシア語 -> 英語)
+  const monthMap = {
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    Mei: 4,
+    Jun: 5,
+    Jul: 6,
+    Agu: 7,
+    Sep: 8,
+    Okt: 9,
+    Nov: 10,
+    Des: 11,
+  };
 
-    // 正規表現で日時文字列を分解
-    // 例: "01 Agu 2025 11:11:15"
-    const parts = wibDateTimeStr.match(/^(\d{2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if (!parts) {
-        console.warn("parseBmkgWibTimeToUTCDate: 日時文字列の形式が正しくありません:", wibDateTimeStr);
-        return null;
-    }
+  // 正規表現で日時文字列を分解
+  // 例: "01 Agu 2025 11:11:15"
+  const parts = wibDateTimeStr.match(
+    /^(\d{2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/
+  );
+  if (!parts) {
+    console.warn(
+      "parseBmkgWibTimeToUTCDate: 日時文字列の形式が正しくありません:",
+      wibDateTimeStr
+    );
+    return null;
+  }
 
-    const day = parseInt(parts[1], 10);
-    const monthAbbr = parts[2];
-    const year = parseInt(parts[3], 10);
-    const hours = parseInt(parts[4], 10);
-    const minutes = parseInt(parts[5], 10);
-    const seconds = parseInt(parts[6], 10);
+  const day = parseInt(parts[1], 10);
+  const monthAbbr = parts[2];
+  const year = parseInt(parts[3], 10);
+  const hours = parseInt(parts[4], 10);
+  const minutes = parseInt(parts[5], 10);
+  const seconds = parseInt(parts[6], 10);
 
-    const monthIndex = monthMap[monthAbbr];
-    if (monthIndex === undefined) {
-        console.warn("parseBmkgWibTimeToUTCDate: 無効な月の略称です:", monthAbbr);
-        return null;
-    }
+  const monthIndex = monthMap[monthAbbr];
+  if (monthIndex === undefined) {
+    console.warn("parseBmkgWibTimeToUTCDate: 無効な月の略称です:", monthAbbr);
+    return null;
+  }
 
-    // WIB (UTC+7) を考慮してUTC Dateオブジェクトを作成
-    // Date.UTC は引数がUTC時刻を表す値を期待するため、WIB時刻から7時間を引く
-    const utcDate = new Date(Date.UTC(year, monthIndex, day, hours - 7, minutes, seconds));
+  // WIB (UTC+7) を考慮してUTC Dateオブジェクトを作成
+  // Date.UTC は引数がUTC時刻を表す値を期待するため、WIB時刻から7時間を引く
+  const utcDate = new Date(
+    Date.UTC(year, monthIndex, day, hours - 7, minutes, seconds)
+  );
 
-    if (isNaN(utcDate.getTime())) {
-        console.warn("parseBmkgWibTimeToUTCDate: Dateオブジェクトの生成に失敗しました:", wibDateTimeStr);
-        return null;
-    }
+  if (isNaN(utcDate.getTime())) {
+    console.warn(
+      "parseBmkgWibTimeToUTCDate: Dateオブジェクトの生成に失敗しました:",
+      wibDateTimeStr
+    );
+    return null;
+  }
 
-    return utcDate;
+  return utcDate;
 }
