@@ -1179,218 +1179,168 @@ function getMagnitudeInteger(magnitude) {
   return 0;
 }
 
-function getIntensityInteger(intensity) {
-  // intensity が null, undefined, 空文字の場合は 0 を返す
-  if (intensity === null || intensity === undefined || intensity === "") {
-    return 0;
-  }
 
-  // すでに数値型であれば、整数に変換
-  if (typeof intensity === "number") {
-    return Math.floor(Math.abs(intensity)); // 負数の場合は絶対値を取る
-  }
-
-  // 文字列型の場合、数値に変換を試みる
-  if (typeof intensity === "string") {
-    // "V" や "VI" のような形式から数値部分を抽出
-    const romanToNumber = {
-      I: 1,
-      II: 2,
-      III: 3,
-      IV: 4,
-      V: 5,
-      VI: 6,
-      VII: 7,
-      VIII: 8,
-      IX: 9,
-      X: 10,
-    };
-    if (intensity in romanToNumber) {
-      return romanToNumber[intensity];
-    }
-  }
-
-  return 0;
-}
 
 // 震度ラベル取得関数（小数値か整数値かで分岐）
 function getIntersityLabel(intensity) {
-  if (!intensity) return "";
+  // null, undefined, 空文字の場合は空文字を返す
+  if (intensity === null || intensity === undefined || intensity === "") {
+    return "";
+  }
 
   let level = "";
   let text = "";
 
   if (typeof intensity === "string") {
-    // ローマ数字対応（例: "III"）
-    if (intensity === "I") {
-      level = "level-1";
-      text = "I";
-    } else if (intensity === "II") {
-      level = "level-2";
-      text = "II";
-    } else if (intensity === "III") {
-      level = "level-3";
-      text = "III";
-    } else if (intensity === "IV") {
-      level = "level-4";
-      text = "IV";
-    } else if (intensity === "V") {
-      level = "level-5";
-      text = "V";
-    } else if (intensity === "VI") {
-      level = "level-6";
-      text = "VI";
-    } else if (intensity === "VII") {
-      level = "level-7";
-      text = "VII";
-    } else if (intensity === "VIII") {
-      level = "level-8";
-      text = "VIII";
-    } else if (intensity === "IX") {
-      level = "level-9";
-      text = "IX";
-    } else if (intensity === "X") {
-      level = "level-10";
-      text = "X";
+    const trimmedIntensity = intensity.trim();
+    if (trimmedIntensity === "") {
+      return "";
+    }
+
+    // ローマ数字対応 (例: "III")
+    // ローマ数字マッピング (レベルとテキストが同じ)
+    const romanLevels = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+    const romanIndex = romanLevels.indexOf(trimmedIntensity);
+    if (romanIndex !== -1) {
+      level = `level-${romanIndex + 1}`;
+      text = trimmedIntensity;
+      return `<span class="intensity-label ${level}">${text}</span>`; // すぐに返す
     }
 
     // 弱/強に対応
-    else if (intensity === "弱") {
+    if (trimmedIntensity === "弱") {
       level = "weak";
       text = "弱";
-    } else if (intensity === "強") {
+      return `<span class="intensity-label ${level}">${text}</span>`;
+    } else if (trimmedIntensity === "強") {
       level = "strong";
       text = "強";
-
-      const match = intensity.match(/([1-9]\.?5?)/);
-      if (match) return parseFloat(match[1]);
-    } else if (typeof intensity === "number") {
-      return intensity;
+      return `<span class="intensity-label ${level}">${text}</span>`;
     }
 
-    // 数値（小数含む）に対応
-    else if (!isNaN(intensity)) {
-      const num = parseFloat(intensity);
+    // 数値文字列に対応 (例: "5.5", "4")
+    const num = parseFloat(trimmedIntensity);
+    if (!isNaN(num)) {
       const isDecimal = num % 1 !== 0;
-
-      // 小数値の場合はlevel-5.5などの形式
       if (isDecimal) {
-        level = `level-${num}`;
-        text = num.toFixed(1); // 例: 5.5 → "5.5"
+        // 小数値の場合は level-5.5 のような形式 (toFixed(1) で1桁の小数にする)
+        // ただし、CSSクラス名に小数点は使えない場合があるため、ダッシュやアンダースコアで置換する必要があるかもしれません。
+        // ここでは仮にそのまま使います。CSS側で対応が必要。
+        level = `level-${num.toFixed(1)}`; // 例: "level-5.5"
+        text = num.toFixed(1); // 例: "5.5"
       } else {
-        level = `level-${Math.floor(num)}`;
-        text = Math.floor(num).toString(); // 例: 5 → "5"
+        // 整数値の場合は level-5 のような形式
+        const intNum = Math.floor(num);
+        level = `level-${intNum}`;
+        text = intNum.toString();
       }
-    } else {
-      return "";
+      return `<span class="intensity-label ${level}">${text}</span>`;
     }
-  } else if (typeof intensity === "number") {
-    const isDecimal = intensity % 1 !== 0;
 
-    // 小数値の場合はlevel-5.5などの形式
+    // その他の文字列 (例: "情報なし") は空文字を返すか、そのまま表示するか？
+    // 現在のロジックでは空文字を返していたので、それに従います。
+    console.warn(`getIntersityLabel: 処理できない文字列形式の震度です。入力: ${intensity}`);
+    return ""; // または return `<span class="intensity-label">${intensity}</span>`; など
+
+  } else if (typeof intensity === "number") {
+    // 数値型の場合
+    const isDecimal = intensity % 1 !== 0;
     if (isDecimal) {
-      level = `level-${intensity.toFixed(0)}`;
-      text = intensity.toFixed(2);
+      level = `level-${intensity.toFixed(1)}`; // 例: "level-5.5"
+      text = intensity.toFixed(1); // 例: "5.5"
     } else {
-      level = `level-${Math.floor(intensity)}`;
-      text = Math.floor(intensity).toString();
+      const intNum = Math.floor(intensity);
+      level = `level-${intNum}`;
+      text = intNum.toString();
     }
+    return `<span class="intensity-label ${level}">${text}</span>`;
+
   } else {
-    //level = "";
-    text = "不明";
+    // その他の型
+    console.warn(`getIntersityLabel: サポートされていない型の震度です。入力: ${intensity} (型: ${typeof intensity})`);
     return "";
   }
-
-  return `<span class="intensity-label ${level}">${text}</span>`;
 }
 
 // 日本震度ラベル取得関数（小数値か整数値かで分岐）
 function getIntersityLabel_j(intensity) {
-  if (!intensity) return "";
+  // 1. null, undefined, 空文字の場合は空文字を返す
+  if (intensity === null || intensity === undefined || intensity === "") {
+    return "";
+  }
 
   let level = "";
   let text = "";
 
+  // 2. 文字列型の場合
   if (typeof intensity === "string") {
-    // ローマ数字対応（例: "III"）
-    if (intensity === "I") {
-      level = "level-1";
-      text = "I";
-    } else if (intensity === "II") {
-      level = "level-2";
-      text = "II";
-    } else if (intensity === "III") {
-      level = "level-3";
-      text = "III";
-    } else if (intensity === "IV") {
-      level = "level-4";
-      text = "IV";
-    } else if (intensity === "V") {
-      level = "level-5";
-      text = "V";
-    } else if (intensity === "VI") {
-      level = "level-6";
-      text = "VI";
-    } else if (intensity === "VII") {
-      level = "level-7";
-      text = "VII";
-    } else if (intensity === "VIII") {
-      level = "level-8";
-      text = "VIII";
-    } else if (intensity === "IX") {
-      level = "level-9";
-      text = "IX";
-    } else if (intensity === "X") {
-      level = "level-10";
-      text = "X";
-    }
+    const trimmedIntensity = intensity.trim();
 
-    // 弱/強に対応
-    else if (intensity === "弱") {
-      level = "weak";
-      text = "弱";
-    } else if (intensity === "強") {
-      level = "strong";
-      text = "強";
-
-      const match = intensity.match(/([1-9]\.?5?)/);
-      if (match) return parseFloat(match[1]);
-    } else if (typeof intensity === "number") {
-      return intensity;
-    }
-
-    // 数値（小数含む）に対応
-    else if (!isNaN(intensity)) {
-      const num = parseFloat(intensity);
-      const isDecimal = num % 1 !== 0;
-
-      // 小数値の場合はlevel-5.5などの形式
-      if (isDecimal) {
-        level = `level-${num}`;
-        text = num.toFixed(1); // 例: 5.5 → "5.5"
-      } else {
-        level = `level-${Math.floor(num)}`;
-        text = Math.floor(num).toString(); // 例: 5 → "5"
-      }
-    } else {
+    // トリム後、空文字なら空文字を返す
+    if (trimmedIntensity === "") {
       return "";
     }
+
+   
+
+    // 4. 漢字「弱」「強」のチェック
+    if (trimmedIntensity === "弱") {
+      level = "weak";
+      text = "弱";
+      return `<span class="intensity-label_j ${level}">${text}</span>`;
+    } else if (trimmedIntensity === "強") {
+      level = "strong";
+      text = "強";
+      return `<span class="intensity-label_j ${level}">${text}</span>`;
+    }
+
+    // 5. 文字列型の数値 ("5.5", "4") のチェック
+    const num = parseFloat(trimmedIntensity);
+    if (!isNaN(num)) {
+      const isDecimal = num % 1 !== 0;
+      if (isDecimal) {
+        // 小数値: level-5.5 (toFixed(1)で1桁の小数)
+        // 注意: CSSクラス名に小数点が含まれる場合があります。
+        level = `level-${num.toFixed(1)}`;
+        text = num.toFixed(1);
+      } else {
+        // 整数値: level-5
+        const intNum = Math.floor(num);
+        level = `level-${intNum}`;
+        text = intNum.toString();
+      }
+      return `<span class="intensity-label_j ${level}">${text}</span>`;
+    }
+
+    // 6. その他の文字列形式 (例: "不明", "情報なし")
+    //    現在のロジックでは、これらの場合は空文字が返っていたようです。
+    //    必要に応じて、そのまま表示するなどの処理も可能です。
+    console.warn(`getIntersityLabel_j: 処理できない文字列形式の震度です。入力: ${intensity}`);
+    return ""; // または return `<span class="intensity-label_j">${intensity}</span>`; など
+
+  // 7. 数値型の場合
   } else if (typeof intensity === "number") {
     const isDecimal = intensity % 1 !== 0;
-
-    // 小数値の場合はlevel-5.5などの形式
     if (isDecimal) {
-      level = `level-${intensity.toFixed(1)}`;
-      text = intensity.toFixed(1);
+      // 小数値
+      level = `level-${intensity.toFixed(1)}`; // 例: "level-5.5"
+      text = intensity.toFixed(1); // 例: "5.5"
     } else {
-      level = `level-${Math.floor(intensity)}`;
-      text = Math.floor(intensity).toString();
+      // 整数値
+      const intNum = Math.floor(intensity);
+      level = `level-${intNum}`;
+      text = intNum.toString();
     }
+    return `<span class="intensity-label_j ${level}">${text}</span>`;
+
+  // 8. その他の型 (例: boolean, object)
   } else {
+    console.warn(`getIntersityLabel_j: サポートされていない型の震度です。入力: ${intensity} (型: ${typeof intensity})`);
     return "";
   }
 
-  return `<span class="intensity-label_j ${level}">${text}</span>`;
+  // (このreturn文には通常到達しませんが、念のため)
+  // return `<span class="intensity-label_j ${level}">${text}</span>`;
 }
 
 // JMA XMLデータ取得
