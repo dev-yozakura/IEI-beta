@@ -185,21 +185,26 @@ function handleApplyMapSettingsClick() {
  */
 function handleWebSocketToggle(source, connect) {
     console.log(`イベントハンドラー: WebSocket トグル - ${source}, 接続: ${connect}`);
-    // 実際の接続/切断ロジックは、グローバル関数 (例: connectJmaEew, disconnectJmaEew) を呼び出す
-    // または、WebSocketインスタンスを管理するオブジェクトのメソッドを呼び出す
-    // ここでは、グローバル関数が存在すると仮定して呼び出し
-    if (connect) {
-        if (typeof window[`connect${source.charAt(0).toUpperCase() + source.slice(1)}`] === 'function') {
-             window[`connect${source.charAt(0).toUpperCase() + source.slice(1)}`]();
-        } else {
-            console.warn(`イベントハンドラー: 接続関数 connect${source.charAt(0).toUpperCase() + source.slice(1)} が見つかりません。`);
-        }
+    
+    // 接続/切断の具体的なロジックは、グローバル関数 (例: connectJmaEew, disconnectJmaEew) に委ねる
+    // このハンドラーは、UIイベントとグローバル関数を橋渡しする役割を果たす
+    
+    const functionName = `${connect ? 'connect' : 'disconnect'}${source.charAt(0).toUpperCase() + source.slice(1)}`;
+    
+    // グローバル関数が存在するかチェック
+    if (typeof window[functionName] === 'function') {
+        console.log(`イベントハンドラー: グローバル関数 ${functionName} を呼び出します。`);
+        window[functionName](); // グローバル関数を呼び出す
     } else {
-        if (typeof window[`disconnect${source.charAt(0).toUpperCase() + source.slice(1)}`] === 'function') {
-             window[`disconnect${source.charAt(0).toUpperCase() + source.slice(1)}`]();
-        } else {
-            console.warn(`イベントハンドラー: 切断関数 disconnect${source.charAt(0).toUpperCase() + source.slice(1)} が見つかりません。`);
-        }
+        // グローバル関数が見つからない場合のフォールバック
+        console.warn(`イベントハンドラー: グローバル関数 ${functionName} が見つかりません。`);
+        // 必要に応じて、エラーメッセージをUIに表示するなどの処理を追加できます
+        // 例: alert(`${source} の${connect ? '接続' : '切断'}に必要な関数が見つかりませんでした。`);
+        
+        // もしくは、WebSocketインスタンスを直接管理するオブジェクトがある場合
+        // if (window.websocketManager && typeof window.websocketManager[functionName] === 'function') {
+        //     window.websocketManager[functionName]();
+        // }
     }
     // 接続状態のUI更新は、WebSocketの onopen/onclose コールバックで stateManager を通じて行う
 }
@@ -368,21 +373,21 @@ function handleSelectAllToggles(action) {
 async function fetchTsunamiData() {
     try {
         // 1. 津波警報情報を取得
-        const infoResponse = await fetch('https://www.jma.go.jp/bosai/tsunami/data/list.json');
+        const infoResponse = await fetch('https://api.p2pquake.net/v2/jma/tsunami');
         if (!infoResponse.ok) throw new Error(`津波情報取得エラー: ${infoResponse.status}`);
         const infoList = await infoResponse.json();
         if (infoList.length === 0) {
              window.stateManager.updateTsunamiData('latestTsunamiInfo', { cancelled: true });
              return;
         }
-        const latestInfoUrl = `https://www.jma.go.jp/bosai/tsunami/data/${infoList[0].file}`;
+        const latestInfoUrl = `https://api.p2pquake.net/v2/jma/tsunami`;
         const dataResponse = await fetch(latestInfoUrl);
         if (!dataResponse.ok) throw new Error(`津波詳細情報取得エラー: ${dataResponse.status}`);
         const latestTsunamiInfo = await dataResponse.json();
 
         // 2. 津波区域GeoJSONを取得 (初回のみ)
         if (!window.stateManager.getState().tsunamiAreaGeoJson) {
-             const geoResponse = await fetch('https://www.jma.go.jp/bosai/common/map/bosai/tsunami_area.geojson');
+             const geoResponse = await fetch('https://api.p2pquake.net/v2/jma/tsunami');
              if (!geoResponse.ok) throw new Error(`津波区域GeoJSON取得エラー: ${geoResponse.status}`);
              const tsunamiAreaGeoJson = await geoResponse.json();
              window.stateManager.updateTsunamiData('tsunamiAreaGeoJson', tsunamiAreaGeoJson);
