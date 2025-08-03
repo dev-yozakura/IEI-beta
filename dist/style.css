@@ -1216,3 +1216,88 @@ a:hover {
     color: #d0a6ff;
 }
 
+/* --- 既存の CSS (必要に応じて調整) --- */
+.connection-status {
+  /* margin-left: 10px; */ /* 古いマージンを削除 */
+  font-size: 0.85em; /* 少し小さく */
+  padding: 3px 8px; /* パディング調整 */
+  border-radius: 12px; /* 角を少し丸く */
+  background-color: #f0f0f0; /* デフォルト背景色 */
+  color: #666; /* デフォルト文字色 */
+  white-space: nowrap; /* テキストが折り返されないように */
+  min-width: 50px; /* 最小幅を設定して揃えやすくする */
+  text-align: center; /* テキストを中央揃え */
+  /* Flexbox で配置するので、インラインブロックは不要 */
+  /* display: inline-block; */
+}
+
+.connection-status.connected {
+  background-color: #d4edda; /* 接続済みの背景色 (薄い緑) */
+  color: #155724; /* 接続済みの文字色 */
+}
+
+.connection-status.disconnected {
+  background-color: #f8d7da; /* 未接続の背景色 (薄い赤) */
+  color: #721c24; /* 未接続の文字色 */
+}
+
+/* --- 新しい CSS --- */
+
+/* .toggle-container を Flexbox で横並びにする */
+.toggle-container {
+  display: flex;
+  align-items: center; /* 要素を縦方向中央揃え */
+  margin-bottom: 8px; /* 各設定項目の下に余白を追加 */
+}
+
+/* 状態表示 (左端) */
+.toggle-container .connection-status {
+  order: 1; /* 最初に表示 */
+  margin-right: 12px; /* ラベルとの間に隙間を追加 */
+  flex-shrink: 0; /* コンテナが狭まった時に圧縮されないように */
+}
+
+/* ラベル (状態表示の右、トグルの左) */
+.toggle-container .toggle-label-left { /* 新しいクラスを使用 */
+  order: 2; /* 2番目に表示 */
+  margin-right: 12px; /* トグルスイッチとの間に隙間を追加 */
+  white-space: nowrap; /* ラベルが折り返されないように */
+  flex-shrink: 0; /* 必要に応じて */
+}
+
+/* トグルスイッチ (右端) */
+.toggle-container .switch {
+  order: 3; /* 最後に表示 */
+  margin: 0; /* トグル自体のマージンをリセット */
+}
+
+/* プレースホルダー (トグル以外の項目用) */
+.toggle-container .connection-status-placeholder {
+  order: 1;
+  margin-right: 12px; /* ラベルとの間に隙間を追加 */
+  min-width: 50px; /* .connection-status と同じ幅にして揃える */
+  /* 透明または最小限の表示 */
+  /* visibility: hidden; */ /* 完全に非表示 */
+  /* または、微妙に見えるように */
+  /* background-color: transparent; color: transparent; */
+  /* または、単に空のスペースとして */
+}
+
+/* 数値入力フィールドのマージン調整 (magThresholdなど) */
+.toggle-container input[type="number"] {
+  margin-left: 12px; /* ラベルとの間に隙間を追加 (プレースホルダーの幅分) */
+}
+
+/* ボタンのマージン調整 (applyMapSettingsなど) */
+.toggle-container button {
+  margin-left: calc(50px + 12px + 12px); /* プレースホルダー + マージン + ラベルマージン分のオフセット */
+  /* もしくは、ボタンを右寄せしたい場合は:
+  margin-left: auto;
+  */
+}
+
+/* テーマ設定セクションの見出しのマージン調整 */
+.map-controls h4 {
+    margin-top: 20px;
+    /* 見出しの上に少し余白を確保 */
+}

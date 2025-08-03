@@ -57,7 +57,7 @@ const NOTIFICATION_LEVELS = {
 // --- 通知関連のグローバル変数 (既存の変数を置き換えまたは追加) ---
 let enableNotification = true; // 既存
 let soundNotification = true; // 既存
-let magThreshold = 1.0; // 既存
+let magThreshold = 3.0; // 既存
 let lastNotificationId = null; // 既存、通知重複防止用
 let processedIds = new Set(); // 既存、通知済みID記録用
 
@@ -929,6 +929,9 @@ async function fetchCwaData() {
     const data = await response.json();
 
     console.log("CWAデータ受信:", data);
+    connections.cwaEq = true;
+      updateConnectionStatusDisplay(); // 追加
+
     // 既存データをクリア
     combinedData.cwaEqList = [];
 
@@ -977,6 +980,9 @@ async function fetchCwaData() {
     updateCombinedDisplay();
   } catch (error) {
     console.error("CWAデータ取得エラー:", error);
+    connections.cwaEq = false;
+      updateConnectionStatusDisplay(); // 追加
+
   }
 }
 
@@ -989,6 +995,8 @@ async function fetchCwaTinyData() {
     const data = await response.json();
 
     console.log("CWAデータ受信:", data);
+    connections.cwaEq_tiny = true;
+    updateConnectionStatusDisplay(); // 追加
     // 既存データをクリア
     combinedData.cwaEqList_tiny = [];
 
@@ -1032,6 +1040,8 @@ async function fetchCwaTinyData() {
     }
   } catch (error) {
     console.error("CWA小区域データ取得エラー:", error);
+    connections.cwaEq_tiny = false;
+    updateConnectionStatusDisplay(); // 追加
   }
 }
 
@@ -1179,8 +1189,6 @@ function getMagnitudeInteger(magnitude) {
   return 0;
 }
 
-
-
 // 震度ラベル取得関数（小数値か整数値かで分岐）
 function getIntersityLabel(intensity) {
   // null, undefined, 空文字の場合は空文字を返す
@@ -1199,7 +1207,18 @@ function getIntersityLabel(intensity) {
 
     // ローマ数字対応 (例: "III")
     // ローマ数字マッピング (レベルとテキストが同じ)
-    const romanLevels = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+    const romanLevels = [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII",
+      "IX",
+      "X",
+    ];
     const romanIndex = romanLevels.indexOf(trimmedIntensity);
     if (romanIndex !== -1) {
       level = `level-${romanIndex + 1}`;
@@ -1239,9 +1258,10 @@ function getIntersityLabel(intensity) {
 
     // その他の文字列 (例: "情報なし") は空文字を返すか、そのまま表示するか？
     // 現在のロジックでは空文字を返していたので、それに従います。
-    console.warn(`getIntersityLabel: 処理できない文字列形式の震度です。入力: ${intensity}`);
+    console.warn(
+      `getIntersityLabel: 処理できない文字列形式の震度です。入力: ${intensity}`
+    );
     return ""; // または return `<span class="intensity-label">${intensity}</span>`; など
-
   } else if (typeof intensity === "number") {
     // 数値型の場合
     const isDecimal = intensity % 1 !== 0;
@@ -1254,10 +1274,11 @@ function getIntersityLabel(intensity) {
       text = intNum.toString();
     }
     return `<span class="intensity-label ${level}">${text}</span>`;
-
   } else {
     // その他の型
-    console.warn(`getIntersityLabel: サポートされていない型の震度です。入力: ${intensity} (型: ${typeof intensity})`);
+    console.warn(
+      `getIntersityLabel: サポートされていない型の震度です。入力: ${intensity} (型: ${typeof intensity})`
+    );
     return "";
   }
 }
@@ -1280,8 +1301,6 @@ function getIntersityLabel_j(intensity) {
     if (trimmedIntensity === "") {
       return "";
     }
-
-   
 
     // 4. 漢字「弱」「強」のチェック
     if (trimmedIntensity === "弱") {
@@ -1315,10 +1334,12 @@ function getIntersityLabel_j(intensity) {
     // 6. その他の文字列形式 (例: "不明", "情報なし")
     //    現在のロジックでは、これらの場合は空文字が返っていたようです。
     //    必要に応じて、そのまま表示するなどの処理も可能です。
-    console.warn(`getIntersityLabel_j: 処理できない文字列形式の震度です。入力: ${intensity}`);
+    console.warn(
+      `getIntersityLabel_j: 処理できない文字列形式の震度です。入力: ${intensity}`
+    );
     return ""; // または return `<span class="intensity-label_j">${intensity}</span>`; など
 
-  // 7. 数値型の場合
+    // 7. 数値型の場合
   } else if (typeof intensity === "number") {
     const isDecimal = intensity % 1 !== 0;
     if (isDecimal) {
@@ -1333,9 +1354,11 @@ function getIntersityLabel_j(intensity) {
     }
     return `<span class="intensity-label_j ${level}">${text}</span>`;
 
-  // 8. その他の型 (例: boolean, object)
+    // 8. その他の型 (例: boolean, object)
   } else {
-    console.warn(`getIntersityLabel_j: サポートされていない型の震度です。入力: ${intensity} (型: ${typeof intensity})`);
+    console.warn(
+      `getIntersityLabel_j: サポートされていない型の震度です。入力: ${intensity} (型: ${typeof intensity})`
+    );
     return "";
   }
 
@@ -1532,16 +1555,27 @@ function updateCombinedDisplay() {
     allData.push(combinedData.jmaEew);
   }
 
-  if (showSA && combinedData.saData && typeof combinedData.saData === 'object' && Object.keys(combinedData.saData).length > 0) {
+  if (
+    showSA &&
+    combinedData.saData &&
+    typeof combinedData.saData === "object" &&
+    Object.keys(combinedData.saData).length > 0
+  ) {
     // combinedData.saData が null/undefined でなく、オブジェクトで、かつキー（プロパティ）を持っているかチェック
     // 必要に応じて、さらに具体的なプロパティの存在を確認する条件を追加できます
     // 例: if (showSA && combinedData.saData && combinedData.saData.id && combinedData.saData.magnitude) { ... }
     allData.push(combinedData.saData);
-    console.log("SA データを統合表示用 allData に追加しました:", combinedData.saData);
-} else if (showSA && (!combinedData.saData || Object.keys(combinedData.saData).length === 0)) {
+    console.log(
+      "SA データを統合表示用 allData に追加しました:",
+      combinedData.saData
+    );
+  } else if (
+    showSA &&
+    (!combinedData.saData || Object.keys(combinedData.saData).length === 0)
+  ) {
     // デバッグ用: 表示がオンになっているが、データが空の場合のログ
-   // console.log("SA データの追加をスキップしました: データが空または無効です。", combinedData.saData);
-}
+    // console.log("SA データの追加をスキップしました: データが空または無効です。", combinedData.saData);
+  }
   // 四川地震局 地震警報
   if (showSC && combinedData.scEew) {
     allData.push(combinedData.scEew);
@@ -1612,7 +1646,7 @@ function updateCombinedDisplay() {
   // 中国地震台網 地震情報
   if (showCENC && combinedData.cencEqList) {
     Object.values(combinedData.cencEqList).forEach((item) => {
-      if (item && item.type !== "reviewed") return;
+      
       allData.push(item);
     });
   }
@@ -1806,7 +1840,7 @@ function updateCombinedDisplay() {
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
       if (item.intensity !== "情報なし") {
-      html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
+        html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
       }
       html += `<p>深さ: ${item.depth} km</p>`;
       // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
@@ -2117,6 +2151,7 @@ sourceIcl.addEventListener("change", () => {
 
 // チェックボックスイベントリスナー（USGS）
 sourceUSGS.addEventListener("change", () => {
+
   if (sourceUSGS.checked) fetchUsgsData(); // ✅ USGSデータを再取得
   updateCombinedDisplay(); // ✅ 統合表示更新
 });
@@ -2237,7 +2272,6 @@ function updateSaDisplay(data) {
     combinedData.saData.innerHTML = "<p>SA 地震情報がありません</p>";
     return;
   }
- 
 
   updateCombinedDisplay(); // 統合表示を更新
 }
@@ -2310,9 +2344,9 @@ function updateCencEqList(data) {
 
   for (let i = 1; i <= 50; i++) {
     const key = `No${i}`;
-    if (data[key] && data[key].type === "reviewed") {
+   
       combinedData.cencEqList[key] = data[key];
-    }
+    
   }
 
   lastUpdateTimes.cencEq = new Date();
@@ -2339,6 +2373,8 @@ function connectJmaEew() {
   jmaEewWs.onopen = () => {
     connections.jmaEew = true;
     jmaEewWs.send("query_jmaeew");
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   jmaEewWs.onmessage = (event) => {
@@ -2363,11 +2399,14 @@ function connectJmaEew() {
   jmaEewWs.onclose = () => {
     connections.jmaEew = false;
     setTimeout(connectJmaEew, 30000); // 30秒後に再接続
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   jmaEewWs.onerror = (error) => {
     console.error("JMA EEW WebSocketエラー:", error);
     jmaEewWs.close();
+    
   };
 }
 // SA WebSocket 接続関数
@@ -2382,6 +2421,9 @@ function connectSa() {
 
   saWs.onopen = () => {
     console.log("SA WebSocket 接続済み");
+    connections.sa = true; // 接続ステータスを更新
+      updateConnectionStatusDisplay(); // 追加
+
     // 必要に応じて接続確認ステータスを更新するUIコードをここに追加できます
     // 例: document.getElementById('saStatus').textContent = '接続済み';
     // 例: document.getElementById('saStatus').className = 'status connected';
@@ -2465,6 +2507,9 @@ function connectSa() {
 
   saWs.onclose = () => {
     console.log("SA WebSocket 切断されました");
+    connections.sa = false; // 接続ステータスを更新
+      updateConnectionStatusDisplay(); // 追加
+
     // 必要に応じて接続ステータスを更新するUIコードをここに追加できます
     // 例: document.getElementById('saStatus').textContent = '切断されました';
     // 例: document.getElementById('saStatus').className = 'status disconnected';
@@ -2485,6 +2530,8 @@ function connectScEew() {
   scEewWs.onopen = () => {
     connections.scEew = true;
     scEewWs.send("query_sceew");
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   scEewWs.onmessage = (event) => {
@@ -2507,6 +2554,8 @@ function connectScEew() {
   scEewWs.onclose = () => {
     connections.scEew = false;
     setTimeout(connectScEew, 30000); // 30秒後に再接続
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   scEewWs.onerror = (error) => {
@@ -2522,6 +2571,8 @@ function connectFjEew() {
   fjEewWs.onopen = () => {
     connections.fjEew = true;
     fjEewWs.send("query_fjeew");
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   fjEewWs.onmessage = (event) => {
@@ -2544,6 +2595,8 @@ function connectFjEew() {
   fjEewWs.onclose = () => {
     connections.fjEew = false;
     setTimeout(connectFjEew, 30000); // 30秒後に再接続
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   fjEewWs.onerror = (error) => {
@@ -2560,6 +2613,8 @@ function connectCeaEew() {
   ceaEewWs.onopen = () => {
     connections.ceaEew = true;
     ceaEewWs.send("query");
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   ceaEewWs.onmessage = (event) => {
@@ -2583,6 +2638,8 @@ function connectCeaEew() {
   ceaEewWs.onclose = () => {
     connections.ceaEew = false;
     setTimeout(connectCeaEew, 30000); // 30秒後に再接続
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   ceaEewWs.onerror = (error) => {
@@ -2599,6 +2656,8 @@ function connectIclEew() {
   iclEewWs.onopen = () => {
     connections.iclEew = true;
     iclEewWs.send("query");
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   iclEewWs.onmessage = (event) => {
@@ -2621,6 +2680,8 @@ function connectIclEew() {
   iclEewWs.onclose = () => {
     connections.iclEew = false;
     setTimeout(connectIclEew, 30000); // 30秒後に再接続
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   iclEewWs.onerror = (error) => {
@@ -2641,6 +2702,8 @@ function connectJmaEqList() {
   jmaEqList.onopen = () => {
     connections.jmaEq = true;
     console.log("JMA地震情報リスト接続済み");
+      updateConnectionStatusDisplay(); // 追加
+
 
     // WebSocket接続後のみクエリ送信
     if (jmaEqList?.readyState === WebSocket.OPEN) {
@@ -2671,6 +2734,7 @@ function connectJmaEqList() {
   jmaEqList.onclose = () => {
     connections.jmaEq = false;
     console.log("JMA地震情報リスト切断されました");
+  updateConnectionStatusDisplay(); // 追加
 
     // 再接続を試行
     setTimeout(connectJmaEqList, 30000);
@@ -2692,6 +2756,8 @@ function connectCencEqList() {
   cencEqWs.onopen = () => {
     connections.cencEq = true;
     cencEqWs.send("query_cenceqlist");
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   cencEqWs.onmessage = (event) => {
@@ -2713,6 +2779,8 @@ function connectCencEqList() {
   cencEqWs.onclose = () => {
     connections.cencEq = false;
     setTimeout(connectCencEqList, 30000); // 30秒後に再接続
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   cencEqWs.onerror = (error) => {
@@ -2732,6 +2800,8 @@ function connectEmscEqList() {
     connections.emscEq = true;
     console.log("EMSC 接続済み");
     emscEqWs.send("query_emsc_eqlist");
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   emscEqWs.onmessage = (event) => {
@@ -2769,6 +2839,8 @@ function connectEmscEqList() {
     connections.emscEq = false;
     console.log("EMSC 切断されました");
     setTimeout(connectEmscEqList, 30000);
+      updateConnectionStatusDisplay(); // 追加
+
   };
 
   emscEqWs.onerror = (error) => {
@@ -5003,4 +5075,70 @@ function parseBmkgWibTimeToUTCDate(wibDateTimeStr) {
   }
 
   return utcDate;
+}
+// ボタンがクリックされたときに実行される関数
+function storeDateValue() {
+  // 入力ボックスから値を取得
+  const inputValue = document.getElementById("numberInput").value;
+
+  // 入力値が空でないかチェック
+  if (inputValue === "") {
+    alert("数値を入力してください");
+    return;
+  }
+
+  // 数値に変換して HypoDate に格納
+  HypoDate = parseFloat(inputValue);
+  if (inputValue){
+    alert(` ${HypoDate}日間の地震情報を取得します。`);
+  }
+  updateCombinedDisplay();
+}
+
+// --- 接続ステータス表示更新関数 ---
+// connections オブジェクトのキーと、対応するチェックボックスIDのマッピング
+// (キー名とチェックボックスIDが一致している場合は、このマッピングは簡略化できますが、
+// 例えば jmaEq と sourceJmaEqList のように異なる場合はマッピングが必要です)
+const connectionKeyToCheckboxId = {
+  jmaEew: 'sourceJMA',
+  scEew: 'sourceSC',
+  fjEew: 'sourceFJ',
+  ceaEew: 'sourceCea',
+  iclEew: 'sourceIcl',
+  jmaEq: 'sourceJmaEqList', // 注意: connectionsキーとチェックボックスIDの対応
+  cencEq: 'sourceCENC',     // 注意: connectionsキーとチェックボックスIDの対応
+  emscEq: 'sourceEMSC',
+  cwaEq: 'sourceCWA',
+  cwaEq_tiny: 'sourceCWA_tiny',
+  sa: 'sourceSA',
+  // BMKG, JmaXml, JmaHypo, USGS, BMKG_M5 は特別扱いまたは connections に含まれない可能性あり
+  // ここでは例として、HTTPベースのものにも対応するキーを追加 (必要に応じて調整)
+  // または、これらは別途処理
+  // bmkg: 'sourceBMKG', // 例: connections に bmkg キーを追加するか、別処理
+  // jmaXml: 'sourceJmaXml', // 例
+  // jmaHypo: 'sourceJmaHypo', // 例
+  // usgs: 'sourceUSGS', // 例
+  // bmkg_M5: 'sourceBMKG_M5', // 例
+};
+
+function updateConnectionStatusDisplay() {
+  console.log("updateConnectionStatusDisplay called"); // デバッグ用
+  for (const [connKey, checkboxId] of Object.entries(connectionKeyToCheckboxId)) {
+    const statusElement = document.getElementById(`status-${checkboxId}`);
+    if (statusElement) {
+       if (connections[connKey] === true) {
+         statusElement.textContent = "接続済み";
+         statusElement.className = "connection-status connected"; // CSSクラス適用
+       } else {
+         statusElement.textContent = "未接続";
+         statusElement.className = "connection-status disconnected"; // CSSクラス適用
+       }
+    } else {
+       console.warn(`Status element for ${checkboxId} not found.`); // デバッグ用
+    }
+  }
+
+ 
+
+  console.log("Connections state:", connections); // デバッグ用
 }
