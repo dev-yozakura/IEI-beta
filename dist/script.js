@@ -1,4 +1,5 @@
 let HypoDate = 0;
+let IsEng = 2; // 1:中国語, 2:英語
 let allData = [];
 // ファイルの先頭付近にグローバル変数を宣言
 let latestTsunamiInfo = null; // 既存
@@ -495,16 +496,7 @@ function updateFjEewDisplay(data) {
   updateCombinedDisplay();
 }
 
-// 中国地震台網 地震情報表示更新
-function updateCencEqList(data) {
-  if (data && data.type === "automatic") {
-    combinedData.cencEqList[data.id] = data;
-    checkAndNotify(data, "cenc"); // ✅ 通知を送信
-  }
 
-  lastUpdateTimes.cencEq = new Date();
-  updateCombinedDisplay();
-}
 
 //EMSC 地震情報表示更新
 function updateEmscEqList(data) {
@@ -925,7 +917,7 @@ async function fetchUsgsData() {
 async function fetchCwaData() {
   try {
     const response = await fetch(
-      `https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0015-002?Authorization=${CWA_API_KEY}&format=JSON`
+      `https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0015-00${IsEng}?Authorization=${CWA_API_KEY}&format=JSON`
     );
     const data = await response.json();
 
@@ -941,7 +933,23 @@ async function fetchCwaData() {
       data.records.Earthquake.forEach((item) => {
         const EarthquakeInfo = item.EarthquakeInfo;
 
-        const time = new Date(EarthquakeInfo.OriginTime);
+        const time = new Date(EarthquakeInfo.OriginTime)
+       const timeInUTC8 = new Date(time.getTime() + 1 * 60 * 60 * 1000);
+
+// 3. ユーザーが指定したタイムゾーンで表示（例：'Asia/Tokyo', 'America/New_York' など）
+const userTimeZone = 'Asia/Tokyo'; // ← ここをユーザーが選べるようにする
+
+const formattedTime = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: userTimeZone,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false, // 12時間制
+}).format(timeInUTC8);
+
         const ReportType = item.ReportType || "情報なし";
 
         const magnitude =
@@ -955,7 +963,28 @@ async function fetchCwaData() {
           EarthquakeInfo.Epicenter.EpicenterLongitude.toFixed(4) || "情報なし";
 
         const ReportContent = item.ReportContent || "情報なし";
+        if (IsEng === 2) {
         const match = ReportContent.match(/Highest intensity was \d+/);
+        if (match) {
+          highestIntensity = match[0];
+          const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
+          combinedData.cwaEqList.push({
+            type: "cwa",
+            Title: ReportType,
+            time: formattedTime,
+            location: location,
+            magnitude: magnitude,
+            depth: depth,
+            intensity: intensity,
+            lat: lat,
+            lng: lon,
+            displayType: "eq",
+            source: "cwa",
+          });
+        }
+        } else {
+        const match = ReportContent.match(/(\d+)級/);
+        
         let highestIntensity = "";
         if (match) {
           highestIntensity = match[0];
@@ -973,7 +1002,7 @@ async function fetchCwaData() {
             displayType: "eq",
             source: "cwa",
           });
-        }
+        }}
       });
     }
 
@@ -990,7 +1019,7 @@ async function fetchCwaData() {
 async function fetchCwaTinyData() {
   try {
     const response = await fetch(
-      `https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0016-002?Authorization=${CWA_API_KEY}&format=JSON`
+      `https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0016-00${IsEng}?Authorization=${CWA_API_KEY}&format=JSON`
     );
     const data = await response.json();
 
@@ -1017,8 +1046,9 @@ async function fetchCwaTinyData() {
           EarthquakeInfo.Epicenter.EpicenterLongitude.toFixed(4) || "情報なし";
 
         const ReportContent = item.ReportContent || "情報なし";
-        const match = ReportContent.match(/Highest intensity was \d+/);
-        let highestIntensity = "";
+        if (IsEng === 2) {
+           const match = ReportContent.match(/Highest intensity was \d+/);
+           let highestIntensity = "";
         if (match) {
           highestIntensity = match[0];
           const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
@@ -1036,6 +1066,27 @@ async function fetchCwaTinyData() {
             source: "cwa_tiny",
           });
         }
+        }else{
+          const match = ReportContent.match(/(\d+)級/);
+        
+        let highestIntensity = "";
+        if (match) {
+          highestIntensity = match[0];
+          const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
+          combinedData.cwaEqList_tiny.push({
+            type: "cwa_tiny",
+            Title: ReportType,
+            time: time.toLocaleString(),
+            location: location,
+            magnitude: magnitude,
+            depth: depth,
+            intensity: intensity,
+            lat: lat,
+            lng: lon,
+            displayType: "eq",
+            source: "cwa_tiny",
+          });
+        }} 
       });
     }
   } catch (error) {
@@ -1334,9 +1385,9 @@ function getIntersityLabel_j(intensity) {
     // 6. その他の文字列形式 (例: "不明", "情報なし")
     //    現在のロジックでは、これらの場合は空文字が返っていたようです。
     //    必要に応じて、そのまま表示するなどの処理も可能です。
-    console.warn(
-      `getIntersityLabel_j: 処理できない文字列形式の震度です。入力: ${intensity}`
-    );
+    //console.warn(
+    //  `getIntersityLabel_j: 処理できない文字列形式の震度です。入力: ${intensity}`
+    //);
     return ""; // または return `<span class="intensity-label_j">${intensity}</span>`; など
 
     // 7. 数値型の場合
@@ -1803,7 +1854,11 @@ function updateCombinedDisplay() {
 
     let html = "";
     html += `<div class ="stat-card">`;
+    if(item.displayType !== "eq" && item.type !== "reviewed"){
+      html += `<div class="stat-card-eew">`;
+    }
     html += `<div class ="stat-card-${getMagnitudeInteger(item.magnitude)}">`;
+    
 
     html += `<div class = "no-badge">No. ${index + 1}</div>`;
 
@@ -1918,16 +1973,14 @@ function updateCombinedDisplay() {
     // JMA緊急地震速報表示
     else if (item.type === "jma_eew") {
       if (item.MaxIntensity) {
-        html += `<h3>${item.Title}</h3>`;
+        html += `<h3>${item.Title}  （第${item.Serial}報）</h3>`;
       } else if (item.intensity) {
         html += `<h3>${item.location}</h3>`;
       }
 
       html += `<p class="time">発生時刻: ${item.OriginTime}</p>`;
       html += `<p class="time">発表時刻: ${item.AnnouncedTime}</p>`;
-      html += `<p class="location">震源地: ${
-        item.Hypocenter || item.HypoCenter
-      }</p>`;
+      html += `<p class="location">震源地: ${item.Hypocenter}</p>`;
       html += `<p>マグニチュード: ${item.Magunitude}</p>`;
       // 震度表示
       if (item.MaxIntensity) {
@@ -2022,20 +2075,13 @@ function updateCombinedDisplay() {
 
     // 中国地震台網 地震情報
     else if (item.type === "reviewed") {
-      let utcShockTimeObj = null;
-      let displayShockTimeStr = "日時不明";
-      if (item && item.time) {
-        utcShockTimeObj = parseLocalTimeToUTCDate(item.time, 8); // 中国時間 (UTC+8)
-        displayShockTimeStr = utcShockTimeObj
-          ? formatUTCDateToJSTString(utcShockTimeObj)
-          : "日時不明";
-      }
+    
       if (item.MaxIntensity) {
         html += `<h3>${item.magnitude}${item.location}</h3>`;
       } else if (item.intensity) {
         html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
       }
-      html += `<p class="">発生時刻: ${displayShockTimeStr}</p>`;
+      html += `<p class="">発生時刻: ${item.time}</p>`;
       // html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
 
@@ -2340,11 +2386,13 @@ function updateJmaEqList(data) {
 function updateCencEqList(data) {
   combinedData.cencEqList = {};
 
-  for (let i = 1; i <= 50; i++) {
-    const key = `No${i}`;
-
-    combinedData.cencEqList[key] = data[key];
-  }
+  Array.from({ length: 50 }, (_, i) => `No${i + 1}`).forEach(key => {
+    if (data.hasOwnProperty(key)) {
+      combinedData.cencEqList[key] = data[key];
+      const utc8time = new Date(data[key].time + " UTC+8");
+      combinedData.cencEqList[key].time = utc8time.toLocaleString();
+    }
+  });
 
   lastUpdateTimes.cencEq = new Date();
   updateCombinedDisplay();
@@ -2437,7 +2485,7 @@ function connectSa() {
         const convertedData = {
           id: data.id || `sa_${new Date(data.shockTime).getTime()}`, // 固有ID、なければ生成
           source: "sa", // データソースを明示
-          displayType: "eq", // 表示タイプを明示
+          displayType: "eew", // 表示タイプを明示
           shockTime: data.shockTime || "不明", // 発生時刻
           updateTime: new Date()
             .toISOString()
