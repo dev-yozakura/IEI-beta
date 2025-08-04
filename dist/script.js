@@ -20,7 +20,9 @@ let combinedData = {
   usgsData: [],
   bmkgData: [],
   bmkg_M5Data: [],
-  saData: [],
+  shakealertData: [],
+  ceaEew: null,
+  iclEew: null,
 };
 
 let markerGroup = null; // マーカーのグループを保持する変数
@@ -326,7 +328,7 @@ let connections = {
   emscEq: false,
   cwaEq: false,
   cwaEq_tiny: false,
-  sa: false, // ShakeAlert
+  shakealert: false, // ShakeAlert
 };
 
 // 最終更新時刻
@@ -361,7 +363,7 @@ const sourceCWA = document.getElementById("sourceCWA");
 const sourceCWA_tiny = document.getElementById("sourceCWA_tiny");
 const sourceJmaEqList = document.getElementById("sourceJmaEqList");
 const sourceJmaHypo = document.getElementById("sourceJmaHypo");
-const sourceSA = document.getElementById("sourceSA");
+const sourceshakealert = document.getElementById("sourceshakealert");
 
 const intervalInput = document.getElementById("intervalInput");
 const startButton = document.getElementById("startButton");
@@ -425,7 +427,7 @@ let iclEewWs = null;
 let emscEqWs = null;
 let cwaEqWs = null;
 let cwaEqWs_tiny = null;
-let saWs = null; // ShakeAlert WebSocket
+let shakealertWs = null; // ShakeAlert WebSocket
 
 // 中国地震局（CEA）用変数
 let ceaWs = null;
@@ -495,8 +497,6 @@ function updateFjEewDisplay(data) {
   lastUpdateTimes.fjEew = new Date();
   updateCombinedDisplay();
 }
-
-
 
 //EMSC 地震情報表示更新
 function updateEmscEqList(data) {
@@ -636,14 +636,6 @@ function updateBmkgM5Display(data) {
   updateCombinedDisplay();
 }
 
-// 中国地震局（CEA）地震情報表示更新
-function updateCeaDisplay(data) {
-  if (data && data.type === "cea_eew") {
-    ceaData = data;
-    checkAndNotify(data, "cea"); // ✅ 通知を送信以下に、**新しく地震情報が追加されたときに通知を出す機能**を追加するコードを示します。この機能は既存の統合地震情報システムに統合可能で、マグニチュード閾値や通知のON/OFF設定も可能です。
-  }
-}
-
 // 中国地震局（CEA）接続関数
 function connectCea() {
   if (ceaEewWs) ceaEewWs.close();
@@ -652,8 +644,8 @@ function connectCea() {
   ceaEewWs.onopen = () => {
     connections.ceaEew = true;
     ceaEewWs.send("query_cea");
-    ceaStatus.textContent = "接続状況: 接続済み";
-    ceaStatus.className = "status connected";
+    combinedStatus.textContent = "接続状況: 接続済み";
+    combinedStatus.className = "status connected";
 
     if (ceaEewWs.readyState === WebSocket.OPEN) {
       ceaEewWs.send("query_cea");
@@ -671,6 +663,7 @@ function connectCea() {
       } else if (data.type === "initial" || data.type === "update") {
         lastUpdateTimes.ceaEew = new Date();
         updateCeaDisplay(data.Data);
+        updateCombinedDisplay(); // 統合表示を更新
       }
     } catch (error) {
       console.error("CEAデータ解析エラー:", error);
@@ -681,9 +674,9 @@ function connectCea() {
 
   ceaEewWs.onclose = () => {
     connections.cea = false;
-    ceaStatus.textContent = "接続状況: 切断されました";
-    ceaStatus.className = "status disconnected";
-    setTimeout(connectCea, 30000); // 30秒後に再接続
+    combinedStatus.textContent = "接続状況: 切断されました";
+    combinedStatus.className = "status disconnected";
+    setTimeout(connectCea, 3000); // 30秒後に再接続
   };
 
   ceaEewWs.onerror = (error) => {
@@ -933,22 +926,22 @@ async function fetchCwaData() {
       data.records.Earthquake.forEach((item) => {
         const EarthquakeInfo = item.EarthquakeInfo;
 
-        const time = new Date(EarthquakeInfo.OriginTime)
-       const timeInUTC8 = new Date(time.getTime() + 1 * 60 * 60 * 1000);
+        const time = new Date(EarthquakeInfo.OriginTime);
+        const timeInUTC8 = new Date(time.getTime() + 1 * 60 * 60 * 1000);
 
-// 3. ユーザーが指定したタイムゾーンで表示（例：'Asia/Tokyo', 'America/New_York' など）
-const userTimeZone = 'Asia/Tokyo'; // ← ここをユーザーが選べるようにする
+        // 3. ユーザーが指定したタイムゾーンで表示（例：'Asia/Tokyo', 'America/New_York' など）
+        const userTimeZone = "Asia/Tokyo"; // ← ここをユーザーが選べるようにする
 
-const formattedTime = new Intl.DateTimeFormat('ja-JP', {
-  timeZone: userTimeZone,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false, // 12時間制
-}).format(timeInUTC8);
+        const formattedTime = new Intl.DateTimeFormat("ja-JP", {
+          timeZone: userTimeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false, // 12時間制
+        }).format(timeInUTC8);
 
         const ReportType = item.ReportType || "情報なし";
 
@@ -964,45 +957,46 @@ const formattedTime = new Intl.DateTimeFormat('ja-JP', {
 
         const ReportContent = item.ReportContent || "情報なし";
         if (IsEng === 2) {
-        const match = ReportContent.match(/Highest intensity was \d+/);
-        if (match) {
-          highestIntensity = match[0];
-          const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
-          combinedData.cwaEqList.push({
-            type: "cwa",
-            Title: ReportType,
-            time: formattedTime,
-            location: location,
-            magnitude: magnitude,
-            depth: depth,
-            intensity: intensity,
-            lat: lat,
-            lng: lon,
-            displayType: "eq",
-            source: "cwa",
-          });
-        }
+          const match = ReportContent.match(/Highest intensity was \d+/);
+          if (match) {
+            highestIntensity = match[0];
+            const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
+            combinedData.cwaEqList.push({
+              type: "cwa",
+              Title: ReportType,
+              time: formattedTime,
+              location: location,
+              magnitude: magnitude,
+              depth: depth,
+              intensity: intensity,
+              lat: lat,
+              lng: lon,
+              displayType: "eq",
+              source: "cwa",
+            });
+          }
         } else {
-        const match = ReportContent.match(/(\d+)級/);
-        
-        let highestIntensity = "";
-        if (match) {
-          highestIntensity = match[0];
-          const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
-          combinedData.cwaEqList.push({
-            type: "cwa",
-            Title: ReportType,
-            time: time.toLocaleString(),
-            location: location,
-            magnitude: magnitude,
-            depth: depth,
-            intensity: intensity,
-            lat: lat,
-            lng: lon,
-            displayType: "eq",
-            source: "cwa",
-          });
-        }}
+          const match = ReportContent.match(/(\d+)級/);
+
+          let highestIntensity = "";
+          if (match) {
+            highestIntensity = match[0];
+            const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
+            combinedData.cwaEqList.push({
+              type: "cwa",
+              Title: ReportType,
+              time: time.toLocaleString(),
+              location: location,
+              magnitude: magnitude,
+              depth: depth,
+              intensity: intensity,
+              lat: lat,
+              lng: lon,
+              displayType: "eq",
+              source: "cwa",
+            });
+          }
+        }
       });
     }
 
@@ -1047,46 +1041,47 @@ async function fetchCwaTinyData() {
 
         const ReportContent = item.ReportContent || "情報なし";
         if (IsEng === 2) {
-           const match = ReportContent.match(/Highest intensity was \d+/);
-           let highestIntensity = "";
-        if (match) {
-          highestIntensity = match[0];
-          const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
-          combinedData.cwaEqList_tiny.push({
-            type: "cwa_tiny",
-            Title: ReportType,
-            time: time.toLocaleString(),
-            location: location,
-            magnitude: magnitude,
-            depth: depth,
-            intensity: intensity,
-            lat: lat,
-            lng: lon,
-            displayType: "eq",
-            source: "cwa_tiny",
-          });
-        }
-        }else{
+          const match = ReportContent.match(/Highest intensity was \d+/);
+          let highestIntensity = "";
+          if (match) {
+            highestIntensity = match[0];
+            const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
+            combinedData.cwaEqList_tiny.push({
+              type: "cwa_tiny",
+              Title: ReportType,
+              time: time.toLocaleString(),
+              location: location,
+              magnitude: magnitude,
+              depth: depth,
+              intensity: intensity,
+              lat: lat,
+              lng: lon,
+              displayType: "eq",
+              source: "cwa_tiny",
+            });
+          }
+        } else {
           const match = ReportContent.match(/(\d+)級/);
-        
-        let highestIntensity = "";
-        if (match) {
-          highestIntensity = match[0];
-          const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
-          combinedData.cwaEqList_tiny.push({
-            type: "cwa_tiny",
-            Title: ReportType,
-            time: time.toLocaleString(),
-            location: location,
-            magnitude: magnitude,
-            depth: depth,
-            intensity: intensity,
-            lat: lat,
-            lng: lon,
-            displayType: "eq",
-            source: "cwa_tiny",
-          });
-        }} 
+
+          let highestIntensity = "";
+          if (match) {
+            highestIntensity = match[0];
+            const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
+            combinedData.cwaEqList_tiny.push({
+              type: "cwa_tiny",
+              Title: ReportType,
+              time: time.toLocaleString(),
+              location: location,
+              magnitude: magnitude,
+              depth: depth,
+              intensity: intensity,
+              lat: lat,
+              lng: lon,
+              displayType: "eq",
+              source: "cwa_tiny",
+            });
+          }
+        }
       });
     }
   } catch (error) {
@@ -1592,7 +1587,7 @@ function updateCombinedDisplay() {
   const showUSGS = sourceUSGS?.checked ?? false; // ✅ 新しいチェックボックス
   const showCWA = sourceCWA?.checked; // ✅ 新しいチェックボックス
   const showCWA_Tiny = sourceCWA_tiny?.checked; // ✅ 新しいチェックボックス
-  const showSA = sourceSA?.checked; // ✅ 新しいチェックボックス
+  const showshakealert = sourceshakealert?.checked; // ✅ 新しいチェックボックス
 
   // ソート条件の取得
   const sortCriteria = document.getElementById("sortCriteria").value;
@@ -1607,25 +1602,26 @@ function updateCombinedDisplay() {
   }
 
   if (
-    showSA &&
-    combinedData.saData &&
-    typeof combinedData.saData === "object" &&
-    Object.keys(combinedData.saData).length > 0
+    showshakealert &&
+    combinedData.shakealertData &&
+    typeof combinedData.shakealertData === "object" &&
+    Object.keys(combinedData.shakealertData).length > 0
   ) {
     // combinedData.saData が null/undefined でなく、オブジェクトで、かつキー（プロパティ）を持っているかチェック
     // 必要に応じて、さらに具体的なプロパティの存在を確認する条件を追加できます
     // 例: if (showSA && combinedData.saData && combinedData.saData.id && combinedData.saData.magnitude) { ... }
-    allData.push(combinedData.saData);
+    allData.push(combinedData.shakealertData);
     console.log(
-      "SA データを統合表示用 allData に追加しました:",
-      combinedData.saData
+      "shakealert データを統合表示用 allData に追加しました:",
+      combinedData.shakealertData
     );
   } else if (
-    showSA &&
-    (!combinedData.saData || Object.keys(combinedData.saData).length === 0)
+    showshakealert &&
+    (!combinedData.shakealertData ||
+      Object.keys(combinedData.shakealertData).length === 0)
   ) {
     // デバッグ用: 表示がオンになっているが、データが空の場合のログ
-    // console.log("SA データの追加をスキップしました: データが空または無効です。", combinedData.saData);
+    // console.log("shakealert データの追加をスキップしました: データが空または無効です。", combinedData.shakealertData);
   }
   // 四川地震局 地震警報
   if (showSC && combinedData.scEew) {
@@ -1854,15 +1850,14 @@ function updateCombinedDisplay() {
 
     let html = "";
     html += `<div class ="stat-card">`;
-    if(item.displayType !== "eq" && item.type !== "reviewed"){
+    if (item.displayType !== "eq" && item.type !== "reviewed") {
       html += `<div class="stat-card-eew">`;
     }
     html += `<div class ="stat-card-${getMagnitudeInteger(item.magnitude)}">`;
-    
 
     html += `<div class = "no-badge">No. ${index + 1}</div>`;
 
-    if (item.source === "sa") {
+    if (item.source === "shakealert") {
       html += `<h3>${item.Title}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
@@ -2042,7 +2037,7 @@ function updateCombinedDisplay() {
     }
 
     // 中国地震局（CEA）地震情報
-    if (item.source === "cea" && item.displayType === "eq") {
+    if (item.source === "cea") {
       html += `<h3>中国地震局（CEA）</h3>`;
       html += `<p class="time">発生時刻: ${item.shockTime}</p>`;
       html += `<p class="location">震源地: ${item.placeName}</p>`;
@@ -2075,7 +2070,6 @@ function updateCombinedDisplay() {
 
     // 中国地震台網 地震情報
     else if (item.type === "reviewed") {
-    
       if (item.MaxIntensity) {
         html += `<h3>${item.magnitude}${item.location}</h3>`;
       } else if (item.intensity) {
@@ -2213,9 +2207,9 @@ sourceCWA_tiny.addEventListener("change", () => {
   updateCombinedDisplay(); // ✅ 統合表示更新
 });
 
-// イベントリスナー（SAチェックボックス）
-sourceSA.addEventListener("change", () => {
-  if (sourceSA.checked) connectSa(); // ✅ SAデータを再取得
+// イベントリスナー（shakealertチェックボックス）
+sourceshakealert.addEventListener("change", () => {
+  if (sourceshakealert.checked) connectshakealert(); // ✅ shakealertデータを再取得
   updateCombinedDisplay(); // ✅ 統合表示更新
 });
 
@@ -2303,17 +2297,20 @@ function updateCeaEewDisplay(data) {
   ceaLastUpdate = new Date();
   updateCombinedDisplay(); // 統合表示を更新
 }
-// SA データ表示更新関数
-function updateSaDisplay(data) {
+// shakealert データ表示更新関数
+function updateshakealertDisplay(data) {
   // 表示領域が存在するか確認
-  if (!combinedData.saData) {
-    console.warn("SA データを表示する要素 (ID: saList) が見つかりません。");
+  if (!combinedData.shakealertData) {
+    console.warn(
+      "shakealert データを表示する要素 (ID: shakealertList) が見つかりません。"
+    );
     return;
   }
 
   // データがなければメッセージを表示
   if (!data) {
-    combinedData.saData.innerHTML = "<p>SA 地震情報がありません</p>";
+    combinedData.shakealertData.innerHTML =
+      "<p>shakealert 地震情報がありません</p>";
     return;
   }
 
@@ -2386,7 +2383,7 @@ function updateJmaEqList(data) {
 function updateCencEqList(data) {
   combinedData.cencEqList = {};
 
-  Array.from({ length: 50 }, (_, i) => `No${i + 1}`).forEach(key => {
+  Array.from({ length: 50 }, (_, i) => `No${i + 1}`).forEach((key) => {
     if (data.hasOwnProperty(key)) {
       combinedData.cencEqList[key] = data[key];
       const utc8time = new Date(data[key].time + " UTC+8");
@@ -2451,30 +2448,30 @@ function connectJmaEew() {
     jmaEewWs.close();
   };
 }
-// SA WebSocket 接続関数
-function connectSa() {
-  if (saWs) {
-    console.log("既存のSA WebSocket接続を閉じます。");
-    saWs.close();
+// shakealert WebSocket 接続関数
+function connectshakealert() {
+  if (shakealertWs) {
+    console.log("既存のshakealert WebSocket接続を閉じます。");
+    shakealertWs.close();
   }
 
-  console.log("SA WebSocketに接続中...");
-  saWs = new WebSocket("wss://ws.fanstudio.tech/sa");
+  console.log("shakealert WebSocketに接続中...");
+  shakealertWs = new WebSocket("wss://ws.fanstudio.tech/sa");
 
-  saWs.onopen = () => {
-    console.log("SA WebSocket 接続済み");
-    connections.sa = true; // 接続ステータスを更新
+  shakealertWs.onopen = () => {
+    console.log("shakealert WebSocket 接続済み");
+    connections.shakealert = true; // 接続ステータスを更新
     updateConnectionStatusDisplay(); // 追加
 
     // 必要に応じて接続確認ステータスを更新するUIコードをここに追加できます
-    // 例: document.getElementById('saStatus').textContent = '接続済み';
-    // 例: document.getElementById('saStatus').className = 'status connected';
+    // 例: document.getElementById('shakealertStatus').textContent = '接続済み';
+    // 例: document.getElementById('shakealertStatus').className = 'status connected';
   };
 
-  saWs.onmessage = (event) => {
+  shakealertWs.onmessage = (event) => {
     try {
       const fullData = JSON.parse(event.data);
-      console.log("SA データ受信:", fullData);
+      console.log("shakealert データ受信:", fullData);
 
       // Data フィールドが存在し、必要な情報を持っているか確認
       if (fullData && fullData.Data) {
@@ -2483,8 +2480,8 @@ function connectSa() {
 
         // 受信したデータを統一構造に変換
         const convertedData = {
-          id: data.id || `sa_${new Date(data.shockTime).getTime()}`, // 固有ID、なければ生成
-          source: "sa", // データソースを明示
+          id: data.id || `shakealert_${new Date(data.shockTime).getTime()}`, // 固有ID、なければ生成
+          source: "shakealert", // データソースを明示
           displayType: "eew", // 表示タイプを明示
           shockTime: data.shockTime || "不明", // 発生時刻
           updateTime: new Date()
@@ -2509,26 +2506,26 @@ function connectSa() {
           time: data.shockTime || "不明", // 統合表示用 time フィールド
         };
 
-        // 統合データオブジェクトに格納 (例: combinedData オブジェクトの saData プロパティ)
+        // 統合データオブジェクトに格納 (例: combinedData オブジェクトの shakealertData プロパティ)
         // ここでは単一の最新データを保持する例
         if (typeof combinedData !== "undefined") {
-          combinedData.saData = convertedData; // 全体データに格納
+          combinedData.shakealertData = convertedData; // 全体データに格納
         }
 
         // 表示を更新
-        updateSaDisplay(convertedData);
+        updateshakealertDisplay(convertedData);
 
         // combinedData に格納して統合表示に反映
         if (typeof combinedData !== "undefined") {
-          // SA は単一の最新データを保持する想定 (他のAPIと同様に)
-          combinedData.saData = convertedData;
+          // shakealert は単一の最新データを保持する想定 (他のAPIと同様に)
+          combinedData.shakealertData = convertedData;
           console.log(
-            "SA データを combinedData に格納しました:",
+            "shakealert データを combinedData に格納しました:",
             convertedData
           );
         } else {
           console.warn(
-            "combinedData オブジェクトが定義されていません。SA データを格納できません。"
+            "combinedData オブジェクトが定義されていません。shakealert データを格納できません。"
           );
         }
 
@@ -2538,31 +2535,36 @@ function connectSa() {
         }
       } else {
         console.log(
-          "SA データ受信しましたが、'Data' フィールドがありません。",
+          "shakealert データ受信しましたが、'Data' フィールドがありません。",
           fullData
         );
       }
     } catch (error) {
-      console.error("SA データ解析エラー:", error, "受信データ:", event.data);
+      console.error(
+        "shakealert データ解析エラー:",
+        error,
+        "受信データ:",
+        event.data
+      );
     }
   };
 
-  saWs.onclose = () => {
-    console.log("SA WebSocket 切断されました");
-    connections.sa = false; // 接続ステータスを更新
+  shakealertWs.onclose = () => {
+    console.log("shakealert WebSocket 切断されました");
+    connections.shakealert = false; // 接続ステータスを更新
     updateConnectionStatusDisplay(); // 追加
 
     // 必要に応じて接続ステータスを更新するUIコードをここに追加できます
-    // 例: document.getElementById('saStatus').textContent = '切断されました';
-    // 例: document.getElementById('saStatus').className = 'status disconnected';
+    // 例: document.getElementById('shakealertStatus').textContent = '切断されました';
+    // 例: document.getElementById('shakealertStatus').className = 'status disconnected';
     // 再接続を試行
-    setTimeout(connectSa, 30000); // 30秒後に再接続
+    setTimeout(connectshakealert, 30000); // 30秒後に再接続
   };
 
-  saWs.onerror = (error) => {
-    console.error("SA WebSocket エラー:", error);
+  shakealertWs.onerror = (error) => {
+    console.error("shakealert WebSocket エラー:", error);
     // 必要に応じてエラー表示を更新するUIコードをここに追加できます
-    saWs.close();
+    shakealertWs.close();
   };
 }
 function connectScEew() {
@@ -3187,7 +3189,7 @@ fetchCwaData(); // CWA 地震情報
 fetchCwaTinyData(); // CWA Tiny 地震情報
 fetchJmaHypoData(HypoDate); // JMA Hypoデータを初期取得
 startAutoFetch(); // 自動取得開始
-connectSa(); // SA WebSocket接続開始
+connectshakealert(); // SA WebSocket接続開始
 
 // 初回XMLデータ取得
 initialJmaXmlFetch();
@@ -3412,7 +3414,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const showCencMarkersInput = document.getElementById("showCencMarkers"); // 例
   const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
   const applyMapSettingsButton = document.getElementById("applyMapSettings");
- 
 
   const magThresholdInput = document.getElementById("magThreshold");
   if (magThresholdInput) {
@@ -3458,7 +3459,7 @@ document.addEventListener("DOMContentLoaded", function () {
     "sourceCENC",
     "sourceBMKG",
     "sourceBMKG_M5",
-    "sourceSA",
+    "sourceshakealert",
     //"sourceJmaXml",
     "sourceJmaHypo",
     "sourceUSGS",
@@ -5140,7 +5141,7 @@ const connectionKeyToCheckboxId = {
   emscEq: "sourceEMSC",
   cwaEq: "sourceCWA",
   cwaEq_tiny: "sourceCWA_tiny",
-  sa: "sourceSA",
+  shakealert: "sourceshakealert",
   // BMKG, JmaXml, JmaHypo, USGS, BMKG_M5 は特別扱いまたは connections に含まれない可能性あり
   // ここでは例として、HTTPベースのものにも対応するキーを追加 (必要に応じて調整)
   // または、これらは別途処理
