@@ -909,6 +909,7 @@ async function fetchUsgsData() {
           lng: lon,
           displayType: "eq",
           source: "usgs",
+          net: props.net || "情報なし", // ネットワーク
         });
       });
     }
@@ -930,7 +931,7 @@ async function fetchCwaData() {
 
     console.log("CWAデータ受信:", data);
     connections.cwaEq = true;
-      updateConnectionStatusDisplay(); // 追加
+    updateConnectionStatusDisplay(); // 追加
 
     // 既存データをクリア
     combinedData.cwaEqList = [];
@@ -981,8 +982,7 @@ async function fetchCwaData() {
   } catch (error) {
     console.error("CWAデータ取得エラー:", error);
     connections.cwaEq = false;
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   }
 }
 
@@ -1646,7 +1646,6 @@ function updateCombinedDisplay() {
   // 中国地震台網 地震情報
   if (showCENC && combinedData.cencEqList) {
     Object.values(combinedData.cencEqList).forEach((item) => {
-      
       allData.push(item);
     });
   }
@@ -1844,7 +1843,7 @@ function updateCombinedDisplay() {
       }
       html += `<p>深さ: ${item.depth} km</p>`;
       // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
-      html += `<p class="source">情報源: USGS</p>`;
+      html += `<p class="source">情報源: USGS (${item.net})</p>`;
     }
     // BMKG地震情報
     if (item.source === "bmkg" && item.displayType === "eq") {
@@ -2151,7 +2150,6 @@ sourceIcl.addEventListener("change", () => {
 
 // チェックボックスイベントリスナー（USGS）
 sourceUSGS.addEventListener("change", () => {
-
   if (sourceUSGS.checked) fetchUsgsData(); // ✅ USGSデータを再取得
   updateCombinedDisplay(); // ✅ 統合表示更新
 });
@@ -2344,9 +2342,8 @@ function updateCencEqList(data) {
 
   for (let i = 1; i <= 50; i++) {
     const key = `No${i}`;
-   
-      combinedData.cencEqList[key] = data[key];
-    
+
+    combinedData.cencEqList[key] = data[key];
   }
 
   lastUpdateTimes.cencEq = new Date();
@@ -2373,8 +2370,7 @@ function connectJmaEew() {
   jmaEewWs.onopen = () => {
     connections.jmaEew = true;
     jmaEewWs.send("query_jmaeew");
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   jmaEewWs.onmessage = (event) => {
@@ -2399,14 +2395,12 @@ function connectJmaEew() {
   jmaEewWs.onclose = () => {
     connections.jmaEew = false;
     setTimeout(connectJmaEew, 30000); // 30秒後に再接続
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   jmaEewWs.onerror = (error) => {
     console.error("JMA EEW WebSocketエラー:", error);
     jmaEewWs.close();
-    
   };
 }
 // SA WebSocket 接続関数
@@ -2422,7 +2416,7 @@ function connectSa() {
   saWs.onopen = () => {
     console.log("SA WebSocket 接続済み");
     connections.sa = true; // 接続ステータスを更新
-      updateConnectionStatusDisplay(); // 追加
+    updateConnectionStatusDisplay(); // 追加
 
     // 必要に応じて接続確認ステータスを更新するUIコードをここに追加できます
     // 例: document.getElementById('saStatus').textContent = '接続済み';
@@ -2508,7 +2502,7 @@ function connectSa() {
   saWs.onclose = () => {
     console.log("SA WebSocket 切断されました");
     connections.sa = false; // 接続ステータスを更新
-      updateConnectionStatusDisplay(); // 追加
+    updateConnectionStatusDisplay(); // 追加
 
     // 必要に応じて接続ステータスを更新するUIコードをここに追加できます
     // 例: document.getElementById('saStatus').textContent = '切断されました';
@@ -2530,8 +2524,7 @@ function connectScEew() {
   scEewWs.onopen = () => {
     connections.scEew = true;
     scEewWs.send("query_sceew");
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   scEewWs.onmessage = (event) => {
@@ -2554,8 +2547,7 @@ function connectScEew() {
   scEewWs.onclose = () => {
     connections.scEew = false;
     setTimeout(connectScEew, 30000); // 30秒後に再接続
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   scEewWs.onerror = (error) => {
@@ -2571,8 +2563,7 @@ function connectFjEew() {
   fjEewWs.onopen = () => {
     connections.fjEew = true;
     fjEewWs.send("query_fjeew");
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   fjEewWs.onmessage = (event) => {
@@ -2595,8 +2586,7 @@ function connectFjEew() {
   fjEewWs.onclose = () => {
     connections.fjEew = false;
     setTimeout(connectFjEew, 30000); // 30秒後に再接続
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   fjEewWs.onerror = (error) => {
@@ -2613,8 +2603,7 @@ function connectCeaEew() {
   ceaEewWs.onopen = () => {
     connections.ceaEew = true;
     ceaEewWs.send("query");
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   ceaEewWs.onmessage = (event) => {
@@ -2638,8 +2627,7 @@ function connectCeaEew() {
   ceaEewWs.onclose = () => {
     connections.ceaEew = false;
     setTimeout(connectCeaEew, 30000); // 30秒後に再接続
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   ceaEewWs.onerror = (error) => {
@@ -2656,8 +2644,7 @@ function connectIclEew() {
   iclEewWs.onopen = () => {
     connections.iclEew = true;
     iclEewWs.send("query");
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   iclEewWs.onmessage = (event) => {
@@ -2680,8 +2667,7 @@ function connectIclEew() {
   iclEewWs.onclose = () => {
     connections.iclEew = false;
     setTimeout(connectIclEew, 30000); // 30秒後に再接続
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   iclEewWs.onerror = (error) => {
@@ -2702,8 +2688,7 @@ function connectJmaEqList() {
   jmaEqList.onopen = () => {
     connections.jmaEq = true;
     console.log("JMA地震情報リスト接続済み");
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
 
     // WebSocket接続後のみクエリ送信
     if (jmaEqList?.readyState === WebSocket.OPEN) {
@@ -2734,7 +2719,7 @@ function connectJmaEqList() {
   jmaEqList.onclose = () => {
     connections.jmaEq = false;
     console.log("JMA地震情報リスト切断されました");
-  updateConnectionStatusDisplay(); // 追加
+    updateConnectionStatusDisplay(); // 追加
 
     // 再接続を試行
     setTimeout(connectJmaEqList, 30000);
@@ -2756,8 +2741,7 @@ function connectCencEqList() {
   cencEqWs.onopen = () => {
     connections.cencEq = true;
     cencEqWs.send("query_cenceqlist");
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   cencEqWs.onmessage = (event) => {
@@ -2779,8 +2763,7 @@ function connectCencEqList() {
   cencEqWs.onclose = () => {
     connections.cencEq = false;
     setTimeout(connectCencEqList, 30000); // 30秒後に再接続
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   cencEqWs.onerror = (error) => {
@@ -2800,8 +2783,7 @@ function connectEmscEqList() {
     connections.emscEq = true;
     console.log("EMSC 接続済み");
     emscEqWs.send("query_emsc_eqlist");
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   emscEqWs.onmessage = (event) => {
@@ -2839,8 +2821,7 @@ function connectEmscEqList() {
     connections.emscEq = false;
     console.log("EMSC 切断されました");
     setTimeout(connectEmscEqList, 30000);
-      updateConnectionStatusDisplay(); // 追加
-
+    updateConnectionStatusDisplay(); // 追加
   };
 
   emscEqWs.onerror = (error) => {
@@ -3383,6 +3364,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const showCencMarkersInput = document.getElementById("showCencMarkers"); // 例
   const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
   const applyMapSettingsButton = document.getElementById("applyMapSettings");
+ 
 
   const magThresholdInput = document.getElementById("magThreshold");
   if (magThresholdInput) {
@@ -5089,7 +5071,7 @@ function storeDateValue() {
 
   // 数値に変換して HypoDate に格納
   HypoDate = parseFloat(inputValue);
-  if (inputValue){
+  if (inputValue) {
     alert(` ${HypoDate}日間の地震情報を取得します。`);
   }
   updateCombinedDisplay();
@@ -5100,17 +5082,17 @@ function storeDateValue() {
 // (キー名とチェックボックスIDが一致している場合は、このマッピングは簡略化できますが、
 // 例えば jmaEq と sourceJmaEqList のように異なる場合はマッピングが必要です)
 const connectionKeyToCheckboxId = {
-  jmaEew: 'sourceJMA',
-  scEew: 'sourceSC',
-  fjEew: 'sourceFJ',
-  ceaEew: 'sourceCea',
-  iclEew: 'sourceIcl',
-  jmaEq: 'sourceJmaEqList', // 注意: connectionsキーとチェックボックスIDの対応
-  cencEq: 'sourceCENC',     // 注意: connectionsキーとチェックボックスIDの対応
-  emscEq: 'sourceEMSC',
-  cwaEq: 'sourceCWA',
-  cwaEq_tiny: 'sourceCWA_tiny',
-  sa: 'sourceSA',
+  jmaEew: "sourceJMA",
+  scEew: "sourceSC",
+  fjEew: "sourceFJ",
+  ceaEew: "sourceCea",
+  iclEew: "sourceIcl",
+  jmaEq: "sourceJmaEqList", // 注意: connectionsキーとチェックボックスIDの対応
+  cencEq: "sourceCENC", // 注意: connectionsキーとチェックボックスIDの対応
+  emscEq: "sourceEMSC",
+  cwaEq: "sourceCWA",
+  cwaEq_tiny: "sourceCWA_tiny",
+  sa: "sourceSA",
   // BMKG, JmaXml, JmaHypo, USGS, BMKG_M5 は特別扱いまたは connections に含まれない可能性あり
   // ここでは例として、HTTPベースのものにも対応するキーを追加 (必要に応じて調整)
   // または、これらは別途処理
@@ -5123,22 +5105,22 @@ const connectionKeyToCheckboxId = {
 
 function updateConnectionStatusDisplay() {
   console.log("updateConnectionStatusDisplay called"); // デバッグ用
-  for (const [connKey, checkboxId] of Object.entries(connectionKeyToCheckboxId)) {
+  for (const [connKey, checkboxId] of Object.entries(
+    connectionKeyToCheckboxId
+  )) {
     const statusElement = document.getElementById(`status-${checkboxId}`);
     if (statusElement) {
-       if (connections[connKey] === true) {
-         statusElement.textContent = "接続済み";
-         statusElement.className = "connection-status connected"; // CSSクラス適用
-       } else {
-         statusElement.textContent = "未接続";
-         statusElement.className = "connection-status disconnected"; // CSSクラス適用
-       }
+      if (connections[connKey] === true) {
+        statusElement.textContent = "接続済み";
+        statusElement.className = "connection-status connected"; // CSSクラス適用
+      } else {
+        statusElement.textContent = "未接続";
+        statusElement.className = "connection-status disconnected"; // CSSクラス適用
+      }
     } else {
-       console.warn(`Status element for ${checkboxId} not found.`); // デバッグ用
+      console.warn(`Status element for ${checkboxId} not found.`); // デバッグ用
     }
   }
-
- 
 
   console.log("Connections state:", connections); // デバッグ用
 }
