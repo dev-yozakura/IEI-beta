@@ -1,6 +1,8 @@
 let HypoDate = 0;
 let IsEng = 2; // 1:中国語, 2:英語
 let allData = [];
+let magmin = 0; // マグニチュードの最小値
+let magmax = 10; // マグニチュードの最大値
 // ファイルの先頭付近にグローバル変数を宣言
 let latestTsunamiInfo = null; // 既存
 let tsunamiAreaGeoJson = null; // <-- 追加: 津波区域GeoJSONデータ用
@@ -195,7 +197,7 @@ function showNotification(title, body, levelSettings, itemId) {
   if (soundNotification && levelSettings && levelSettings.sound) {
     // levelSettings の存在もチェック
     try {
-      console.log(`音声通知再生を試みます: ${levelSettings.sound}`); // デバッグ用ログ
+      //  console.log(`音声通知再生を試みます: ${levelSettings.sound}`); // デバッグ用ログ
       const audio = new Audio(levelSettings.sound);
       // audio.volume = 0.8; // 必要に応じて音量調整 (0.0 〜 1.0)
       // audio.load(); // 読み込みを促す（オプション）
@@ -235,7 +237,7 @@ function showNotification(title, body, levelSettings, itemId) {
   try {
     // - ブラウザ通知の表示 -
     const notification = new Notification(title, notificationOptions);
-    console.log("通知を表示しました:", title, body, safeLevelSettings);
+    // console.log("通知を表示しました:", title, body, safeLevelSettings);
 
     // - 通知クリック時の動作 -
     notification.onclick = function () {
@@ -314,7 +316,7 @@ function initNotificationSettings() {
     soundNotificationCheckbox.checked = soundNotification;
   }
 
-  console.log("通知設定の初期化が完了しました。");
+  // console.log("通知設定の初期化が完了しました。");
 }
 // 接続状態
 let connections = {
@@ -563,28 +565,6 @@ function updateUsgsList(data) {
   updateCombinedDisplay();
 }
 
-// BMKG 地震情報表示更新
-function updateBmkgDisplay(data) {
-  if (data && data.type === "bmkg") {
-    combinedData.bmkgData = data;
-    checkAndNotify(data, "bmkg"); // ✅ 通知を送信
-  }
-
-  bmkgLastUpdate = new Date();
-  updateCombinedDisplay();
-}
-
-// BMKG M5.0+ 地震情報表示更新
-function updateBmkgM5Display(data) {
-  if (data && data.type === "bmkg_m5") {
-    combinedData.bmkg_M5Data = data;
-    checkAndNotify(data, "bmkg_m5"); // ✅ 通知を送信
-  }
-
-  bmkg_M5LastUpdate = new Date();
-  updateCombinedDisplay();
-}
-
 // 中国地震局（CEA）接続関数
 function connectCea() {
   if (ceaEewWs) ceaEewWs.close();
@@ -791,7 +771,7 @@ async function fetchUsgsData() {
       `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/${usgsTypemag}_${usgsType}.geojson`
     );
     const data = await response.json();
-    console.log("USGSデータ受信:", data);
+    //console.log("USGSデータ受信:", data);
 
     // 既存データをクリア
     combinedData.usgsData = [];
@@ -830,23 +810,25 @@ async function fetchUsgsData() {
           props.intensity = null; // どちらも情報なしの場合は"情報なし"を使用
         }
         // 統一構造に変換
-        combinedData.usgsData.push({
-          type: "usgs",
-          Title: props.title,
-          time: time.toLocaleString(),
-          updateTime: updateTime.toLocaleString(),
-          location: props.place,
-          magnitude: magnitude,
-          magtype: props.magType || "M", // マグニチュードタイプ
-          intensity: props.intensity || "情報なし", // 最大震度（CDI または MMI）
-          depth: depth,
-          lat: lat,
-          lng: lon,
-          displayType: "eq",
-          source: "usgs",
-          net: props.net || "情報なし", // ネットワーク
-          distance: distance.toFixed(2), // 距離
-        });
+        if (magmin <= magnitude && magnitude <= magmax) {
+          combinedData.usgsData.push({
+            type: "usgs",
+            Title: props.title,
+            time: time.toLocaleString(),
+            updateTime: updateTime.toLocaleString(),
+            location: props.place,
+            magnitude: magnitude,
+            magtype: props.magType || "M", // マグニチュードタイプ
+            intensity: props.intensity || "情報なし", // 最大震度（CDI または MMI）
+            depth: depth,
+            lat: lat,
+            lng: lon,
+            displayType: "eq",
+            source: "usgs",
+            net: props.net || "情報なし", // ネットワーク
+            distance: distance.toFixed(2), // 距離
+          });
+        }
       });
     }
 
@@ -865,7 +847,7 @@ async function fetchCwaData() {
     );
     const data = await response.json();
 
-    console.log("CWAデータ受信:", data);
+    //console.log("CWAデータ受信:", data);
     connections.cwaEq = true;
     updateConnectionStatusDisplay(); // 追加
 
@@ -914,20 +896,23 @@ async function fetchCwaData() {
           if (match) {
             highestIntensity = match[0];
             const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
-            combinedData.cwaEqList.push({
-              type: "cwa",
-              Title: ReportType,
-              time: formattedTime,
-              location: location,
-              magnitude: magnitude,
-              depth: depth,
-              intensity: intensity,
-              lat: lat,
-              lng: lon,
-              displayType: "eq",
-              source: "cwa",
-              distance: distance.toFixed(2),
-            });
+
+            if (magmin <= magnitude && magnitude <= magmax) {
+              combinedData.cwaEqList.push({
+                type: "cwa",
+                Title: ReportType,
+                time: formattedTime,
+                location: location,
+                magnitude: magnitude,
+                depth: depth,
+                intensity: intensity,
+                lat: lat,
+                lng: lon,
+                displayType: "eq",
+                source: "cwa",
+                distance: distance.toFixed(2),
+              });
+            }
           }
         } else {
           const match = ReportContent.match(/(\d+)級/);
@@ -971,7 +956,7 @@ async function fetchCwaTinyData() {
     );
     const data = await response.json();
 
-    console.log("CWAデータ受信:", data);
+    //console.log("CWAデータ受信:", data);
     connections.cwaEq_tiny = true;
     updateConnectionStatusDisplay(); // 追加
     // 既存データをクリア
@@ -1001,20 +986,22 @@ async function fetchCwaTinyData() {
           if (match) {
             highestIntensity = match[0];
             const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
-            combinedData.cwaEqList_tiny.push({
-              type: "cwa_tiny",
-              Title: ReportType,
-              time: time.toLocaleString(),
-              location: location,
-              magnitude: magnitude,
-              depth: depth,
-              intensity: intensity,
-              lat: lat,
-              lng: lon,
-              displayType: "eq",
-              source: "cwa_tiny",
-              distance: distance.toFixed(2),
-            });
+            if (magmin <= magnitude && magnitude <= magmax) {
+              combinedData.cwaEqList_tiny.push({
+                type: "cwa_tiny",
+                Title: ReportType,
+                time: time.toLocaleString(),
+                location: location,
+                magnitude: magnitude,
+                depth: depth,
+                intensity: intensity,
+                lat: lat,
+                lng: lon,
+                displayType: "eq",
+                source: "cwa_tiny",
+                distance: distance.toFixed(2),
+              });
+            }
           }
         } else {
           const match = ReportContent.match(/(\d+)級/);
@@ -1445,23 +1432,25 @@ async function fetchBmkgData() {
         );
         const location = locationMatch?.[1]?.trim() || "情報なし";
         // 地震情報を統一構造に変換
-        combinedData.bmkgData.push({
-          type: "bmkg",
-          Title: "地震情報",
-          Tanggal: item.Tanggal,
-          Jam: item.Jam,
-          time: item.DateTime,
-          lat: lat,
-          lng: lon,
-          magnitude: item.Magnitude,
-          depth: item.Kedalaman?.replace(" km", "") || "情報なし",
-          location: location,
-          intensity: intensity,
-          feltDetails: item.Dirasakan,
-          displayType: "eq",
-          source: "bmkg",
-          distance: distance.toFixed(2), // 距離を追加
-        });
+        if (magmin <= item.Magnitude && item.Magnitude <= magmax) {
+          combinedData.bmkgData.push({
+            type: "bmkg",
+            Title: "地震情報",
+            Tanggal: item.Tanggal,
+            Jam: item.Jam,
+            time: item.DateTime,
+            lat: lat,
+            lng: lon,
+            magnitude: item.Magnitude,
+            depth: item.Kedalaman?.replace(" km", "") || "情報なし",
+            location: location,
+            intensity: intensity,
+            feltDetails: item.Dirasakan,
+            displayType: "eq",
+            source: "bmkg",
+            distance: distance.toFixed(2), // 距離を追加
+          });
+        }
       });
     }
 
@@ -1502,22 +1491,24 @@ async function fetchBmkg_M5Data() {
         const intensity = intensityMatch?.[0]?.trim() || "情報なし";
 
         // 地震情報を統一構造に変換
-        combinedData.bmkg_M5Data.push({
-          type: "bmkg_m5",
-          Title: "M5.0+ 地震情報",
-          Tanggal: item.Tanggal,
-          Jam: item.Jam,
-          time: item.DateTime,
-          lat: lat,
-          lng: lon,
-          magnitude: item.Magnitude,
-          depth: item.Kedalaman?.replace(" km", "") || "情報なし",
-          location: item.Wilayah,
-          tsunamiPotential: item.Potensi, // フィールド名を小文字に統一
-          displayType: "eq",
-          source: "bmkg_m5",
-          distance: distance.toFixed(2), // 距離を追加
-        });
+        if (magmin <= item.Magnitude && item.Magnitude <= magmax) {
+          combinedData.bmkg_M5Data.push({
+            type: "bmkg_m5",
+            Title: "M5.0+ 地震情報",
+            Tanggal: item.Tanggal,
+            Jam: item.Jam,
+            time: item.DateTime,
+            lat: lat,
+            lng: lon,
+            magnitude: item.Magnitude,
+            depth: item.Kedalaman?.replace(" km", "") || "情報なし",
+            location: item.Wilayah,
+            tsunamiPotential: item.Potensi, // フィールド名を小文字に統一
+            displayType: "eq",
+            source: "bmkg_m5",
+            distance: distance.toFixed(2), // 距離を追加
+          });
+        }
       });
     }
 
@@ -1570,10 +1561,10 @@ function updateCombinedDisplay() {
     // 必要に応じて、さらに具体的なプロパティの存在を確認する条件を追加できます
     // 例: if (showSA && combinedData.saData && combinedData.saData.id && combinedData.saData.magnitude) { ... }
     allData.push(combinedData.shakealertData);
-    console.log(
-      "shakealert データを統合表示用 allData に追加しました:",
-      combinedData.shakealertData
-    );
+    //console.log(
+    //  "shakealert データを統合表示用 allData に追加しました:",
+    //  combinedData.shakealertData
+    //);
   } else if (
     showshakealert &&
     (!combinedData.shakealertData ||
@@ -1645,7 +1636,12 @@ function updateCombinedDisplay() {
         here.lon
       );
       // typeフィールドを除外
-      if (item && item.Title) {
+      if (
+        item &&
+        item.Title &&
+        magmin <= item.magnitude &&
+        item.magnitude <= magmax
+      ) {
         allData.push({
           ...item,
           source: "jma",
@@ -1659,7 +1655,9 @@ function updateCombinedDisplay() {
   // 中国地震台網 地震情報
   if (showCENC && combinedData.cencEqList) {
     Object.values(combinedData.cencEqList).forEach((item) => {
-      allData.push(item);
+      if (magmin <= item.magnitude && item.magnitude <= magmax) {
+        allData.push(item);
+      }
     });
   }
 
@@ -1667,7 +1665,12 @@ function updateCombinedDisplay() {
   if (showEMSC && combinedData.emscEqList) {
     Object.values(combinedData.emscEqList).forEach((item) => {
       // ✅ item が存在し、かつ source が "emsc" のものだけを追加
-      if (item && item.source === "emsc") {
+      if (
+        item &&
+        item.source === "emsc" &&
+        magmin <= item.magnitude &&
+        item.magnitude <= magmax
+      ) {
         // <-- ここを修正
         allData.push(item);
       }
@@ -1698,8 +1701,9 @@ function updateCombinedDisplay() {
       // 必要に応じてフィルタリングや変換をここで行う
       // 例: 特定のマグニチュード以上のみ表示 etc.
       // if (item.magnitude >= 3.0) { // 例: M3.0以上のみ
-      allData.push(item);
-      // }
+      if (magmin <= item.magnitude && item.magnitude <= magmax) {
+        allData.push(item);
+      }
     });
   }
   // ソート処理
@@ -1761,30 +1765,18 @@ function updateCombinedDisplay() {
   // 関数を呼び出して地図を表示
   // === 修正箇所 3 (オプション): 地図マーカーの更新条件を確認 ===
   // 関数を呼び出して地図を表示 (地図が初期化されており、かつ tab2 がアクティブな場合のみ)
-  const isTab2Active = document
-    .getElementById("tab2")
-    ?.classList.contains("active");
-
+  // 地図マーカーの更新 (tab2がアクティブな場合)
+  const isTab2Active = document.getElementById("tab2")?.classList.contains("active");
   if (map && isTab2Active) {
-    // ✅ map が存在し、かつ tab2 がアクティブな場合のみ実行
-    console.log(
-      "updateCombinedDisplay: 地図にマーカーを表示します (tab2 アクティブ)"
-    );
-    initMapWithMarkers(map, combinedData);
+    console.log("updateCombinedDisplay: 地図にマーカーを表示します (tab2 アクティブ)");
+    // 修正後: allData 配列を直接渡す
+    initMapWithMarkers(map, allData);
   } else if (map) {
-    //console.log(
-    //   "updateCombinedDisplay: 地図は初期化されていますが、tab2 は非アクティブです。マーカー更新をスキップします。"
-    //);
-    // オプション: tab2 が非アクティブな場合でも、地図のデータ（マーカー）だけは更新しておきたい場合
-    // （ただし表示はされない）。これはパフォーマンス的に微妙な場合もあるので注意。
-    // 例えば、次に tab2 を開いたときに最新のマーカーが表示されるようにしたい場合。
-    // その場合は、以下のように条件を緩和できます:
-    // initMapWithMarkers(map, combinedData); // map があるなら更新
+    // tab2 非アクティブ時もマーカーデータを更新したい場合 (オプション)
+    // initMapWithMarkers(map, allData);
   } else {
-    // map が未初期化 (tab2 がまだ開かれていないなど)
-    console.log(
-      "updateCombinedDisplay: 地図が初期化されていないため、マーカー表示をスキップします。"
-    );
+    // 地図未初期化時
+    // console.log("updateCombinedDisplay: 地図が初期化されていません。");
   }
   if (allData.length === 0) {
     combinedEqList.innerHTML = "<p class='no-data'>地震情報がありません</p>";
@@ -1812,6 +1804,7 @@ function updateCombinedDisplay() {
     console.log("データ更新: tab2.2 がアクティブのため球面グラフを更新します");
     updatePlotlySphereGraph("plotly-graph-2-2"); // ✅ 関数名とIDを一致させる
   }
+  
   // 各項目を表示
   allData.forEach((item, index) => {
     const container = document.createElement("div");
@@ -1914,7 +1907,7 @@ function updateCombinedDisplay() {
         html += `<p>最大烈度: ${getIntersityLabel(item.intensity)}</p>`;
       }
 
-      html += `<p>深さ: ${item.depth} 距離: ${item.distance} km</p>`;
+      html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
       //html += `<p>緯度: ${item.latitude}, 経度: ${item.longitude}</p>`;
 
       html += `<p class="source">情報源: 日本気象庁</p>`;
@@ -2367,18 +2360,67 @@ function updateIclEewDisplay(data) {
 }
 
 // JMA 地震情報リスト表示更新（typeフィールドを除外）
+// 修正: item.depth から数値部分のみを抽出して格納
 function updateJmaEqList(data) {
   jmaEqList.innerHTML = "";
-
   if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
     jmaEqList.innerHTML = "<p>地震情報がありません</p>";
-    combinedData.jmaEqList = null;
+    combinedData.jmaEqList = null; // combinedData も更新
     return;
   }
 
-  combinedData.jmaEqList = { ...data };
-  delete combinedData.jmaEqList.md5;
-  delete combinedData.jmaEqList.Pond;
+  // combinedData.jmaEqList を新しいオブジェクトで初期化
+  combinedData.jmaEqList = {};
+
+  // data オブジェクトの各キー (No01, No02, ...) を処理
+  Object.keys(data).forEach((key) => {
+    // type, md5, Pond などの不要なキーはスキップ
+    if (key === "type" || key === "md5" || key === "Pond") {
+      return;
+    }
+
+    // 元の地震データを取得
+    const originalItem = data[key];
+
+    // 必要なプロパティを持つ新しいオブジェクトを作成
+    const processedItem = { ...originalItem }; // まず元のデータをコピー
+
+    // --- 修正箇所 ここから ---
+    // item.depth が文字列で "km" を含む場合、数値部分のみを抽出
+    if (typeof originalItem.depth === 'string' && originalItem.depth.includes('km')) {
+       // 数字（整数または小数）を抽出する正規表現
+       const depthMatch = originalItem.depth.match(/^([0-9]+\.?[0-9]*)/);
+       if (depthMatch && depthMatch[1] !== undefined) {
+         // 抽出した数値文字列を parseFloat で数値に変換し、格納
+         processedItem.depth = parseFloat(depthMatch[1]);
+         // console.log(`Depth for ${key} converted from "${originalItem.depth}" to ${processedItem.depth}`);
+       } else {
+         // 数値が抽出できなかった場合のフォールバック (例: "km" のみなど)
+         console.warn(`JMA Eq List: ${key} の depth "${originalItem.depth}" から数値を抽出できませんでした。元の値を保持します。`);
+         // 必要に応じて、processedItem.depth = null; などに設定することも可能
+       }
+    } else if (typeof originalItem.depth === 'string') {
+        // "km" が含まれていないが文字列の場合、数値に変換を試みる
+        const parsedDepth = parseFloat(originalItem.depth);
+        if (!isNaN(parsedDepth)) {
+            processedItem.depth = parsedDepth;
+        } else {
+            // 数値に変換できない文字列 ("情報なし" など) はそのまま保持 or 特別処理
+            // console.log(`JMA Eq List: ${key} の depth "${originalItem.depth}" は数値に変換できません。`);
+        }
+    }
+    // item.depth がすでに数値の場合は、特に変更しない
+    // --- 修正箇所 ここまで ---
+
+    // 処理済みのアイテムを combinedData.jmaEqList に格納
+    combinedData.jmaEqList[key] = processedItem;
+  });
+
+  // combinedData.jmaEqList から md5, Pond を削除する処理は不要になったのでコメントアウト
+  // (個別のキー処理でスキップしているため)
+
+  lastUpdateTimes.jmaEq = new Date();
+  updateCombinedDisplay(); // 統合表示を更新
 }
 // 中国地震台網 地震情報表示更新
 function updateCencEqList(data) {
@@ -2429,7 +2471,7 @@ function connectJmaEew() {
   jmaEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("JMA EEWデータ受信:", data);
+      // console.log("JMA EEWデータ受信:", data);
 
       if (data.type === "heartbeat") {
         jmaEewWs.send(
@@ -2459,15 +2501,15 @@ function connectJmaEew() {
 // shakealert WebSocket 接続関数
 function connectshakealert() {
   if (shakealertWs) {
-    console.log("既存のshakealert WebSocket接続を閉じます。");
+    //console.log("既存のshakealert WebSocket接続を閉じます。");
     shakealertWs.close();
   }
 
-  console.log("shakealert WebSocketに接続中...");
+  //console.log("shakealert WebSocketに接続中...");
   shakealertWs = new WebSocket("wss://ws.fanstudio.tech/sa");
 
   shakealertWs.onopen = () => {
-    console.log("shakealert WebSocket 接続済み");
+    //   console.log("shakealert WebSocket 接続済み");
     connections.shakealert = true; // 接続ステータスを更新
     updateConnectionStatusDisplay(); // 追加
 
@@ -2479,7 +2521,7 @@ function connectshakealert() {
   shakealertWs.onmessage = (event) => {
     try {
       const fullData = JSON.parse(event.data);
-      console.log("shakealert データ受信:", fullData);
+      //console.log("shakealert データ受信:", fullData);
 
       // Data フィールドが存在し、必要な情報を持っているか確認
       if (fullData && fullData.Data) {
@@ -2533,10 +2575,10 @@ function connectshakealert() {
         if (typeof combinedData !== "undefined") {
           // shakealert は単一の最新データを保持する想定 (他のAPIと同様に)
           combinedData.shakealertData = convertedData;
-          console.log(
-            "shakealert データを combinedData に格納しました:",
-            convertedData
-          );
+          // console.log(
+          //   "shakealert データを combinedData に格納しました:",
+          //   convertedData
+          // );
         } else {
           console.warn(
             "combinedData オブジェクトが定義されていません。shakealert データを格納できません。"
@@ -2547,7 +2589,7 @@ function connectshakealert() {
         if (typeof updateCombinedDisplay === "function") {
           updateCombinedDisplay();
         }
-      } else {
+      } else if (fullData !== heartbeat) {
         console.log(
           "shakealert データ受信しましたが、'Data' フィールドがありません。",
           fullData
@@ -2594,7 +2636,7 @@ function connectScEew() {
   scEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("四川地震局データ受信:", data);
+      //console.log("四川地震局データ受信:", data);
 
       if (data.type === "heartbeat") {
         scEewWs.send(
@@ -2633,7 +2675,7 @@ function connectFjEew() {
   fjEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("福建地震局データ受信:", data);
+      // console.log("福建地震局データ受信:", data);
 
       if (data.type === "heartbeat") {
         fjEewWs.send(
@@ -2673,7 +2715,7 @@ function connectCeaEew() {
   ceaEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("中国地震局データ受信:", data);
+      //console.log("中国地震局データ受信:", data);
 
       if (data.type === "heartbeat") {
         ceaEewWs.send(
@@ -2714,7 +2756,7 @@ function connectIclEew() {
   iclEewWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("成都地震局データ受信:", data);
+      // console.log("成都地震局データ受信:", data);
 
       if (data.type === "heartbeat") {
         iclEewWs.send(
@@ -2763,7 +2805,7 @@ function connectJmaEqList() {
   jmaEqList.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("JMAデータ受信:", data);
+      //console.log("JMAデータ受信:", data);
 
       if (data.type === "heartbeat") {
         jmaEqList.send(
@@ -2811,7 +2853,7 @@ function connectCencEqList() {
   cencEqWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("CENCデータ受信:", data);
+      //console.log("CENCデータ受信:", data);
       if (data.type === "heartbeat") {
         cencEqWs.send(
           JSON.stringify({ type: "pong", timestamp: data.timestamp })
@@ -2853,7 +2895,7 @@ function connectEmscEqList() {
   emscEqWs.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data); // メッセージ全体を message とする
-      console.log("EMSCデータ受信:", message); // ログを追加
+      //console.log("EMSCデータ受信:", message); // ログを追加
 
       // action が "create" または "update" で、message.data が存在し、message.data.type が "Feature" かを確認
       if (
@@ -3209,21 +3251,6 @@ connectshakealert(); // SA WebSocket接続開始
 initialJmaXmlFetch();
 
 let map;
-// 地図マーカー設定 (追加)
-let mapMarkerSettings = {
-  // 各データソースのマーカー表示/非表示設定
-  // キー: データ配列の名前 (markers オブジェクトのプロパティ名)
-  // 値: true (表示) / false (非表示)
-  cwaEqList_tiny: true, // 例: CWA Tiny データ
-  cwaEqList: true, // 例: CWA データ
-  usgsData: true, // 例: USGS データ
-  bmkgData: true, // 例: BMKG データ
-  bmkg_M5Data: true, // 例: BMKG M5+ データ
-  jmaEqList: false, // 例: JMA データ (デフォルト非表示)
-  cencEqList: false, // 例: CENC データ (デフォルト非表示)
-  emscEqList: false, // 例: EMSC データ (デフォルト非表示)
-  // 必要に応じて他のデータソースも追加
-};
 // 地図を初期化 (修正箇所 3: 既存の地図があれば削除)
 function initMap() {
   // 既存の地図があれば削除
@@ -3296,7 +3323,63 @@ function getDepthColor(depth) {
   else if (depth < 200) return "blue"; // 青
   else return "purple"; // 紫
 }
-function initMapWithMarkers(map, markers) {
+// マーカー作成関数 (変更なし)
+function createMarker(markerData) {
+  // ... (createMarker 関数の内容は変更ありません) ...
+  const magnitude = markerData.magnitude || markerData.Magunitude || 1;
+  const iconSize = getIconSize(magnitude);
+  const lat = markerData.lat || markerData.latitude;
+  const lng = markerData.lng || markerData.longitude;
+  const depth = markerData.depth || markerData.Depth;
+  // 緯度経度が無効な場合はマーカーを作成しない
+  if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
+    console.warn("無効な緯度経度のためマーカーを作成しません:", markerData);
+    return null;
+  }
+
+  const color = getDepthColor(depth);
+  const customIcon = L.icon({
+    iconUrl: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='50' fill='${color}' stroke='black' stroke-width='2'/%3E%3C/svg%3E`,
+    iconSize: iconSize,
+    iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
+    popupAnchor: [0, -iconSize[1]],
+  });
+
+const popupContent = // ポップアップ/ツールチップに表示する内容は同じ
+  (markerData.time || markerData.OriginTime || "時間不明") +
+  "<br>" +
+  (markerData.location ||
+    markerData.HypoCenter ||
+    markerData.Hypocenter ||
+    "場所不明") +
+  "<br>" +
+  `<p>M${magnitude}  深さ: ${markerData.depth || markerData.Depth || "不明"} km</p>` +
+  `<p>情報源: ${markerData.source || "不明"}</p>`;
+
+// マーカーを作成
+const marker = L.marker([lat, lng], { icon: customIcon });
+
+// --- 変更箇所 ここから ---
+// ホバーツールチップをバインド (カーソルを合わせたときに表示)
+// オプションで、クリック用のポップアップも同時にバインドできます。
+marker.bindTooltip(popupContent, {
+  permanent: false,     // true にすると常に表示、false でホバー時のみ
+  direction: 'top',     // ツールチップの表示方向 ('top', 'bottom', 'left', 'right', 'center', 'auto')
+  offset: [0, -10],     // アイコンからのオフセット [x, y] (ピクセル)
+  opacity: 0.9          // ツールチップの透明度
+});
+
+// (オプション) クリックでもポップアップを表示したい場合はこちらも残す
+// marker.bindPopup(popupContent);
+// --- 変更箇所 ここまで ---
+
+return marker;
+  
+}
+
+// 地図にマーカーを表示する関数 (修正版)
+// 引数を combinedData オブジェクトから、フラットなマーカーデータ配列 markerDataArray に変更
+function initMapWithMarkers(map, markerDataArray) { // 引数名変更
   if (!map) {
     console.warn("initMapWithMarkers: 地図が初期化されていません");
     return;
@@ -3312,63 +3395,16 @@ function initMapWithMarkers(map, markers) {
   // 新しいFeatureGroupを作成
   markerGroup = L.featureGroup();
 
-  // マーカー作成関数
-  function createMarker(markerData) {
-    const magnitude = markerData.magnitude || markerData.Magunitude || 1;
-    const iconSize = getIconSize(magnitude);
-    const lat = markerData.lat || markerData.latitude;
-    const lng = markerData.lng || markerData.longitude;
-    const depth = markerData.depth || markerData.Depth;
-    // 緯度経度が無効な場合はマーカーを作成しない
-    if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
-      console.warn("無効な緯度経度のためマーカーを作成しません:", markerData);
-      return null;
-    }
+  // マーカー作成関数 (createMarker) は上記の通り変更なし
 
-    const color = getDepthColor(depth);
-    const customIcon = L.icon({
-      iconUrl: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='50' fill='${color}' stroke='black' stroke-width='2'/%3E%3C/svg%3E`,
-      iconSize: iconSize,
-      iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
-      popupAnchor: [0, -iconSize[1]],
-    });
+  // 渡されたマーカーデータ配列(markerDataArray)を処理
+  // これには updateCombinedDisplay で allData に格納された統合・フィルタリング済みのデータが渡されることを想定
+  console.log(`処理対象マーカー数: ${markerDataArray.length}`); // ログも更新
 
-    return L.marker([lat, lng], { icon: customIcon }).bindPopup(
-      (markerData.time || markerData.OriginTime || "時間不明") +
-        "<br>" +
-        (markerData.location ||
-          markerData.HypoCenter ||
-          markerData.Hypocenter ||
-          "場所不明") +
-        "<br>" +
-        `<p>M${magnitude}  深さ: ${
-          markerData.depth || markerData.Depth || "不明"
-        } km</p>` +
-        `<p>情報源: ${markerData.source || "不明"}</p>`
-    );
-  }
-
-  // すべてのマーカーデータを処理
-  const allMarkers = [
-    ...(markers.cwaEqList_tiny || []),
-    ...(markers.cwaEqList || []),
-    ...(markers.usgsData || []),
-    // 必要に応じて他のマーカーデータも追加
-    // ...(markers.jmaEqList || []), // 例: JMAデータも追加する場合
-    ...(markers.bmkgData || []),
-    ...(markers.bmkg_M5Data || []),
-    ...Object.values(markers.cencEqList || {}),
-    ...Object.values(markers.emscEqList || {}),
-    ...(markers.jmaHypoData || []),
-  ];
-
-  console.log(`処理対象マーカー数: ${allMarkers.length}`);
-
-  allMarkers.forEach((markerData) => {
+  markerDataArray.forEach((markerData) => { // markerDataArray をループ
     try {
       const marker = createMarker(markerData);
       if (marker) {
-        // createMarkerがnullを返さない場合のみ追加
         markerGroup.addLayer(marker);
       }
     } catch (e) {
@@ -3377,36 +3413,37 @@ function initMapWithMarkers(map, markers) {
   });
 
   map.addLayer(markerGroup);
-  console.log(`マーカーを ${allMarkers.length} 個追加しました`);
+  console.log(`マーカーを ${markerDataArray.length} 個追加しました`); // ログも更新
 }
 
 window.addEventListener("load", function () {
-  console.log("ページロード完了イベント発火");
+  //console.log("ページロード完了イベント発火");
 
-  // --- 修正箇所 1: tab2 の地図初期化を削除 ---
-  // 以下のコードブロックをコメントアウトまたは削除します。
-  /*
-    try {
-        console.log("地図を初期化します...");
-        map = initMap(); // 初期化
-        console.log("地図初期化完了");
-
-        // invalidateSize を遅延させて実行 (タブ切り替え時と同じ)
-        setTimeout(() => {
-            if (map) {
-                console.log("地図サイズを再計算します");
-                map.invalidateSize();
-                console.log("地図サイズ再計算完了");
-                // 必要に応じて、初期マーカーを表示
-                // (updateCombinedDisplayが自動的に呼び出される場合は不要)
-                // initMapWithMarkers(map, combinedData);
-            }
-        }, 200); // 200msの遅延
-    } catch (error) {
-        console.error("loadイベントでの地図初期化中にエラーが発生しました:", error);
+  getCurrentLocation(
+    // 成功時の処理
+    function (position) {
+      // 現在地取得成功後に行いたい処理
+      // 例: 地図の中心を現在地に移動、マーカーを表示、近隣の地震データを再取得など
+      console.log("現在地取得後の処理を実行します...");
+      if (map) {
+        // map オブジェクトが定義済みの場合
+        map.setView([here.lat, here.lon], 9); // 地図の中心を現在地に設定
+        // 必要に応じて、現在地マーカーを追加
+        // L.marker([here.lat, here.lon]).addTo(map).bindPopup("現在地").openPopup();
+        // 震源距離の計算が基準点に依存する場合、関連データの再描画が必要かもしれません
+        // updateCombinedDisplay(); // 例: 統合表示を更新
+        // console.log("地図の中心を現在地に設定しました:", here);
+      }
+    },
+    // 失敗時の処理
+    function (error) {
+      // 現在地取得失敗時の処理
+      // 例: ユーザーに通知、デフォルト位置のまま処理を継続
+      alert("現在地を取得できませんでした。デフォルトの位置情報で表示します。");
+      // 必要に応じて、デフォルト位置での初期化処理を再実行
+      // initMap(); // 例: 地図を初期化
     }
-    */
-  // --- 修正箇所 1 ここまで ---
+  );
 });
 window.addEventListener("load", async () => {
   await fetchTsunamiAreaGeoJson();
@@ -3417,18 +3454,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const tabButtons = document.querySelectorAll(".tab-btn");
   const tabContents = document.querySelectorAll(".tab-content");
   const tabIndicator = document.querySelector(".tab-indicator");
-
-  const showCwaTinyMarkersInput = document.getElementById("showCwaTinyMarkers");
-  const showCwaMarkersInput = document.getElementById("showCwaMarkers");
-  const showUsgsMarkersInput = document.getElementById("showUsgsMarkers");
-  const showBmkgMarkersInput = document.getElementById("showBmkgMarkers");
-  const showBmkgM5MarkersInput = document.getElementById("showBmkgM5Markers");
-  const showJmaMarkersInput = document.getElementById("showJmaMarkers"); // 例
-
-  const showCencMarkersInput = document.getElementById("showCencMarkers"); // 例
-  const showEmscMarkersInput = document.getElementById("showEmscMarkers"); // 例
-  const applyMapSettingsButton = document.getElementById("applyMapSettings");
-
   const magThresholdInput = document.getElementById("magThreshold");
   if (magThresholdInput) {
     magThresholdInput.value = magThreshold; // 初期値を設定
@@ -3460,6 +3485,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // 一括操作ボタンの要素を取得
   const selectAllButton = document.getElementById("selectAllButton");
   const deselectAllButton = document.getElementById("deselectAllButton");
+
+  sortCriteria.addEventListener("change", updateCombinedDisplay);
+  sortDirection.addEventListener("change", updateCombinedDisplay);
+  // ソート条件が変更された場合の処理をここに追加
 
   // tab3 内のすべての設定可能なトグルスイッチの input 要素のIDリスト
   // 実際の tab3 内のIDに合わせて更新してください
@@ -3607,93 +3636,12 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     });
 
-    // --- 地図設定のロード ---
-    function loadMapMarkerSettings() {
-      const savedSettings = localStorage.getItem("mapMarkerSettings");
-      if (savedSettings) {
-        try {
-          mapMarkerSettings = JSON.parse(savedSettings);
-        } catch (e) {
-          console.error("保存された地図設定の読み込みに失敗しました:", e);
-        }
-      }
 
-      // UIに設定を反映 (input要素のcheckedプロパティを設定)
-      if (showCwaTinyMarkersInput)
-        showCwaTinyMarkersInput.checked =
-          mapMarkerSettings.cwaEqList_tiny ?? true;
-      if (showCwaMarkersInput)
-        showCwaMarkersInput.checked = mapMarkerSettings.cwaEqList ?? true;
-      if (showUsgsMarkersInput)
-        showUsgsMarkersInput.checked = mapMarkerSettings.usgsData ?? true;
-      if (showBmkgMarkersInput)
-        showBmkgMarkersInput.checked = mapMarkerSettings.bmkgData ?? true;
-      if (showBmkgM5MarkersInput)
-        showBmkgM5MarkersInput.checked = mapMarkerSettings.bmkg_M5Data ?? true;
-      if (showJmaMarkersInput)
-        showJmaMarkersInput.checked = mapMarkerSettings.jmaEqList ?? false; // 例
-      if (showCencMarkersInput)
-        showCencMarkersInput.checked = mapMarkerSettings.cencEqList ?? false; // 例
-      if (showEmscMarkersInput)
-        showEmscMarkersInput.checked = mapMarkerSettings.emscEqList ?? false; // 例
-    }
 
-    // --- 地図設定の保存 ---
-    function saveMapMarkerSettings() {
-      localStorage.setItem(
-        "mapMarkerSettings",
-        JSON.stringify(mapMarkerSettings)
-      );
-    }
+  
 
-    // --- 地図設定の適用 ---
-    function applyMapMarkerSettings() {
-      // UIから設定を取得 (input要素のcheckedプロパティから取得)
-      if (showCwaTinyMarkersInput)
-        mapMarkerSettings.cwaEqList_tiny = showCwaTinyMarkersInput.checked;
-      if (showCwaMarkersInput)
-        mapMarkerSettings.cwaEqList = showCwaMarkersInput.checked;
-      if (showUsgsMarkersInput)
-        mapMarkerSettings.usgsData = showUsgsMarkersInput.checked;
-      if (showBmkgMarkersInput)
-        mapMarkerSettings.bmkgData = showBmkgMarkersInput.checked;
-      if (showBmkgM5MarkersInput)
-        mapMarkerSettings.bmkg_M5Data = showBmkgM5MarkersInput.checked;
-      if (showJmaMarkersInput)
-        mapMarkerSettings.jmaEqList = showJmaMarkersInput.checked; // 例
-      if (showCencMarkersInput)
-        mapMarkerSettings.cencEqList = showCencMarkersInput.checked; // 例
-      if (showEmscMarkersInput)
-        mapMarkerSettings.emscEqList = showEmscMarkersInput.checked; // 例
-
-      // 設定を保存
-      saveMapMarkerSettings();
-
-      // マーカーを再描画
-      if (map) {
-        console.log("地図設定が変更されたため、マーカーを再描画します");
-        initMapWithMarkers(map, combinedData);
-        // サイズ再計算も行っておく
-        setTimeout(() => map.invalidateSize(), 100);
-      } else {
-        console.warn(
-          "地図が初期化されていないため、マーカーの再描画をスキップします"
-        );
-      }
-    }
-
-    // 初期設定をロード
-    loadMapMarkerSettings();
-
-    // 設定適用ボタンのイベントリスナー
-    if (applyMapSettingsButton) {
-      applyMapSettingsButton.addEventListener("click", applyMapMarkerSettings);
-      console.log("地図設定適用ボタンのイベントリスナーを追加しました");
-    } else {
-      console.warn("地図設定適用ボタン (#applyMapSettings) が見つかりません");
-    }
-    // トグルスイッチの変更イベントリスナー (オプション: 即時反映)
-    // すべてのinput要素に対してイベントリスナーを追加
+  
+  
 
     function updateIndicator() {
       const activeButton = document.querySelector(".tab-btn.active");
@@ -3752,7 +3700,7 @@ function generateHypoUrls(daysBack = 7) {
  */
 async function fetchJmaHypoData(daysBack = 7) {
   const urls = generateHypoUrls(daysBack);
-  console.log("取得する気象庁GeoJSON URLリスト:", urls);
+  //console.log("取得する気象庁GeoJSON URLリスト:", urls);
 
   const fetchPromises = urls.map((url) =>
     fetch(url)
@@ -3815,9 +3763,9 @@ async function fetchJmaHypoData(daysBack = 7) {
 
     combinedData.jmaHypoData = allEarthquakeData;
     lastUpdateTimes.jmaHypo = new Date(); // 最終更新日時を記録
-    console.log(
-      `気象庁GeoJSONデータを取得・更新しました。総数: ${allEarthquakeData.length}`
-    );
+    //console.log(
+    //  `気象庁GeoJSONデータを取得・更新しました。総数: ${allEarthquakeData.length}`
+    //);
 
     // 統合表示を更新
     updateCombinedDisplay();
@@ -5182,7 +5130,7 @@ const connectionKeyToCheckboxId = {
 };
 
 function updateConnectionStatusDisplay() {
-  console.log("updateConnectionStatusDisplay called"); // デバッグ用
+  // console.log("updateConnectionStatusDisplay called"); // デバッグ用
   for (const [connKey, checkboxId] of Object.entries(
     connectionKeyToCheckboxId
   )) {
@@ -5196,11 +5144,11 @@ function updateConnectionStatusDisplay() {
         statusElement.className = "connection-status disconnected"; // CSSクラス適用
       }
     } else {
-      console.warn(`Status element for ${checkboxId} not found.`); // デバッグ用
+      // console.warn(`Status element for ${checkboxId} not found.`); // デバッグ用
     }
   }
 
-  console.log("Connections state:", connections); // デバッグ用
+  // console.log("Connections state:", connections); // デバッグ用
 }
 
 function toRadians(degrees) {
@@ -5223,7 +5171,147 @@ function epicentralDistance(lat1, lon1, lat2, lon2) {
   return R * c; // km
 }
 
-const here = {
+let here = {
   lat: 34.717065, // 大阪駅の緯度
   lon: 135.497329, // 大阪駅の経度
 };
+
+function getCurrentLocation(onSuccess, onError) {
+  // Geolocation API が利用可能かチェック
+  if (navigator.geolocation) {
+    console.log("Geolocation が利用可能です。現在地を取得中...");
+    // 現在地を取得
+    // オプションで、より高精度な位置情報やタイムアウト時間を指定できます
+    const options = {
+      enableHighAccuracy: true, // 高精度を要求
+      timeout: 10000, // タイムアウト時間（ミリ秒）
+      maximumAge: 600000, // キャッシュされた位置情報の有効期限（ミリ秒）-> 10分
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      // 成功時のコールバック
+      function (position) {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        console.log(
+          `現在地を取得しました: 緯度 ${latitude}, 経度 ${longitude}`
+        );
+
+        // here オブジェクトを更新
+        here = {
+          lat: latitude,
+          lon: longitude,
+        };
+        console.log("here オブジェクトが更新されました:", here);
+
+        // 成功時のコールバック関数を呼び出す（引数に位置情報を渡す）
+        if (onSuccess && typeof onSuccess === "function") {
+          onSuccess(position);
+        }
+      },
+      // エラー時のコールバック
+      function (error) {
+        let errorMessage = "位置情報の取得に失敗しました。";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "ユーザーが位置情報の取得を拒否しました。";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "位置情報が利用できません。";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "位置情報の取得がタイムアウトしました。";
+            break;
+          case error.UNKNOWN_ERROR:
+            errorMessage = "原因不明のエラーが発生しました。";
+            break;
+        }
+        console.warn(
+          errorMessage,
+          "エラーコード:",
+          error.code,
+          "メッセージ:",
+          error.message
+        );
+
+        // 失敗時のコールバック関数を呼び出す（引数にエラーオブジェクトを渡す）
+        if (onError && typeof onError === "function") {
+          onError(error);
+        }
+      },
+      options // オプションを渡す
+    );
+  } else {
+    // Geolocation API がサポートされていない場合
+    const errorMessage =
+      "このブラウザでは Geolocation がサポートされていません。";
+    console.error(errorMessage);
+    // エラー処理をここに記述することもできます
+    // 例: ユーザーに通知、デフォルト位置の使用など
+    if (onError && typeof onError === "function") {
+      onError(new Error("Geolocation not supported"));
+    }
+  }
+}
+
+// magmin と magmax の入力要素と適用ボタンを取得
+const magMinInput = document.getElementById('magMinInput');
+const magMaxInput = document.getElementById('magMaxInput');
+const applyMagRangeButton = document.getElementById('applyMagRangeButton');
+
+// 入力ボックスに初期値を設定
+if (magMinInput) magMinInput.value = magmin;
+if (magMaxInput) magMaxInput.value = magmax;
+
+// 適用ボタンのクリックイベントリスナー
+if (applyMagRangeButton) {
+    applyMagRangeButton.addEventListener('click', function() {
+        applyMagRange(); // 関数を呼び出して処理
+    });
+}
+
+// エンターキーで適用できるようにする場合 (オプション)
+if (magMinInput) {
+    magMinInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') applyMagRange();
+    });
+}
+if (magMaxInput) {
+    magMaxInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') applyMagRange();
+    });
+}
+
+// --- マグニチュード範囲を適用する関数 ---
+function applyMagRange() {
+    // 入力値を取得し、数値に変換
+    const newMin = parseFloat(magMinInput.value);
+    const newMax = parseFloat(magMaxInput.value);
+
+    // 入力値が有効な数値かチェック
+    if (isNaN(newMin) || isNaN(newMax)) {
+        alert("有効な数値を入力してください。");
+        // 入力ボックスの値を元に戻す (オプション)
+        magMinInput.value = magmin;
+        magMaxInput.value = magmax;
+        return;
+    }
+
+    // magmin が magmax 以下かチェック (オプションだが推奨)
+    if (newMin > newMax) {
+        alert("最小マグニチュードは最大マグニチュード以下である必要があります。");
+        // 入力ボックスの値を元に戻す (オプション)
+        magMinInput.value = magmin;
+        magMaxInput.value = magmax;
+        return;
+    }
+
+    // グローバル変数を更新
+    magmin = newMin;
+    magmax = newMax;
+
+    console.log(`マグニチュード範囲が更新されました: magmin=${magmin}, magmax=${magmax}`);
+
+    // 表示を更新 (combinedData や allData を再構築・再フィルタリング)
+    updateCombinedDisplay();
+}

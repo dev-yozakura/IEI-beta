@@ -79,7 +79,7 @@
               <p class="no-data">統合地震情報を読み込んでいます...</p>
             </div>
             <div class="status" id="combinedStatus">
-              
+
               最新更新: 読み込み中...
             </div>
           </div>
@@ -176,6 +176,25 @@
           <h3>情報表示設定</h3>
           <!-- データソースフィルター -->
           <div class="map-controls">
+            <h4 style="margin-top: 20px">データ取得設定</h4>
+            <div style="margin-top: 10px">
+              <label for="intervalInput">自動取得間隔（秒）:</label>
+              <input type="number" id="intervalInput" min="1" value="30" style="width: 60px; margin-right: 10px" />
+              <button id="startButton">開始</button>
+              <button id="stopButton" style="margin-left: 5px">停止</button>
+            </div>
+
+            <h4 style="margin-top: 20px">範囲設定</h4>
+            <label for="magMinInput">最小マグニチュード:</label>
+            <input type="number" id="magMinInput" min="0" max="10" step="0.1" value="0">
+            <!-- min, max, step は適宜調整してください -->
+
+            <label for="magMaxInput">最大マグニチュード:</label>
+            <input type="number" id="magMaxInput" min="0" max="10" step="0.1" value="10">
+            <!-- min, max, step は適宜調整してください -->
+
+            <button id="applyMagRangeButton">適用</button>
+
             <h4>EEW (緊急地震速報)</h4>
             <div class="toggle-container">
               <label class="toggle-label" for="sourceJMA">気象庁-EEW</label>
@@ -183,7 +202,7 @@
                 <input type="checkbox" id="sourceJMA" checked />
                 <span class="slider"></span>
               </label>
-                      <span id="status-sourceJMA" class="connection-status">状態不明</span> <!-- 追加 -->
+              <span id="status-sourceJMA" class="connection-status">状態不明</span> <!-- 追加 -->
 
             </div>
             <div class="toggle-container">
@@ -192,7 +211,7 @@
                 <input type="checkbox" id="sourceSC" checked />
                 <span class="slider"></span>
               </label>
-                      <span id="status-sourceSC" class="connection-status">状態不明</span> <!-- 追加 -->
+              <span id="status-sourceSC" class="connection-status">状態不明</span> <!-- 追加 -->
 
             </div>
             <div class="toggle-container">
@@ -201,51 +220,51 @@
                 <input type="checkbox" id="sourceFJ" checked />
                 <span class="slider"></span>
               </label>
-                      <span id="status-sourceFJ" class="connection-status">状態不明</span> <!-- 追加 -->
+              <span id="status-sourceFJ" class="connection-status">状態不明</span> <!-- 追加 -->
 
             </div>
             <div class="toggle-container">
-        <label class="toggle-label" for="sourceCea">中国-EEW　</label>
-        <label class="switch">
-          <input type="checkbox" id="sourceCea" checked />
-          <span class="slider"></span>
-        </label>
-        <span id="status-sourceCea" class="connection-status">状態不明</span> <!-- 追加 -->
-      </div>
-      <div class="toggle-container">
-        <label class="toggle-label" for="sourceIcl">成都-EEW　</label>
-        <label class="switch">
-          <input type="checkbox" id="sourceIcl" checked />
-          <span class="slider"></span>
-        </label>
-        <span id="status-sourceIcl" class="connection-status">状態不明</span> <!-- 追加 -->
-      </div>
-      <div class="toggle-container">
-        <label class="toggle-label" for="sourceshakealert">ShakeAlert</label>
-        <label class="switch">
-          <input type="checkbox" id="sourceshakealert" checked />
-          <span class="slider"></span>
-        </label>
-        <span id="status-sourceshakealert" class="connection-status">状態不明</span> <!-- 追加 -->
-      </div>
+              <label class="toggle-label" for="sourceCea">中国-EEW　</label>
+              <label class="switch">
+                <input type="checkbox" id="sourceCea" checked />
+                <span class="slider"></span>
+              </label>
+              <span id="status-sourceCea" class="connection-status">状態不明</span> <!-- 追加 -->
+            </div>
+            <div class="toggle-container">
+              <label class="toggle-label" for="sourceIcl">成都-EEW　</label>
+              <label class="switch">
+                <input type="checkbox" id="sourceIcl" checked />
+                <span class="slider"></span>
+              </label>
+              <span id="status-sourceIcl" class="connection-status">状態不明</span> <!-- 追加 -->
+            </div>
+            <div class="toggle-container">
+              <label class="toggle-label" for="sourceshakealert">ShakeAlert　</label>
+              <label class="switch">
+                <input type="checkbox" id="sourceshakealert" checked />
+                <span class="slider"></span>
+              </label>
+              <span id="status-sourceshakealert" class="connection-status">状態不明</span> <!-- 追加 -->
+            </div>
 
-      <h4 style="margin-top: 20px">地震情報</h4>
-      <div class="toggle-container">
-        <label class="toggle-label" for="sourceJmaEqList">気象庁 地震情報</label>
-        <label class="switch">
-          <input type="checkbox" id="sourceJmaEqList" checked />
-          <span class="slider"></span>
-        </label>
-        <span id="status-sourceJmaEqList" class="connection-status">状態不明</span> <!-- 追加 -->
-      </div>
-      <div class="toggle-container">
-        <label class="toggle-label" for="sourceCENC">中国地震台網 　</label>
-        <label class="switch">
-          <input type="checkbox" id="sourceCENC" checked />
-          <span class="slider"></span>
-        </label>
-        <span id="status-sourceCENC" class="connection-status">状態不明</span> <!-- 追加 -->
-      </div>
+            <h4 style="margin-top: 20px">地震情報</h4>
+            <div class="toggle-container">
+              <label class="toggle-label" for="sourceJmaEqList">気象庁 地震情報</label>
+              <label class="switch">
+                <input type="checkbox" id="sourceJmaEqList" checked />
+                <span class="slider"></span>
+              </label>
+              <span id="status-sourceJmaEqList" class="connection-status">状態不明</span> <!-- 追加 -->
+            </div>
+            <div class="toggle-container">
+              <label class="toggle-label" for="sourceCENC">中国地震台網 　</label>
+              <label class="switch">
+                <input type="checkbox" id="sourceCENC" checked />
+                <span class="slider"></span>
+              </label>
+              <span id="status-sourceCENC" class="connection-status">状態不明</span> <!-- 追加 -->
+            </div>
             <div class="toggle-container">
               <label class="toggle-label" for="sourceBMKG">BMKG</label>
               <label class="switch">
@@ -284,10 +303,6 @@
                 <input type="checkbox" id="sourceUSGS" checked />
                 <span class="slider"></span>
               </label>
-            </div>
-
-            <!-- USGS 設定 -->
-            <div style="margin-top: 15px; padding-left: 20px">
               <label for="usgssetting">USGS期間:</label>
               <select id="usgssetting">
                 <option value="1d">1日 (Default)</option>
@@ -305,30 +320,35 @@
               </select>
             </div>
 
+            <!-- USGS 設定 -->
+            <div style="margin-top: 15px; padding-left: 20px">
+
+            </div>
+
             <div class="toggle-container" style="margin-top: 15px">
-        <label class="toggle-label" for="sourceCWA">中央気象署（台湾）重大　</label>
-        <label class="switch">
-          <input type="checkbox" id="sourceCWA" checked />
-          <span class="slider"></span>
-        </label>
-        <span id="status-sourceCWA" class="connection-status">状態不明</span> <!-- 追加 -->
-      </div>
-      <div class="toggle-container">
-        <label class="toggle-label" for="sourceCWA_tiny">中央気象署（台湾）小区域</label>
-        <label class="switch">
-          <input type="checkbox" id="sourceCWA_tiny" checked />
-          <span class="slider"></span>
-        </label>
-        <span id="status-sourceCWA_tiny" class="connection-status">状態不明</span> <!-- 追加 -->
-      </div>
-      <div class="toggle-container">
-        <label class="toggle-label" for="sourceEMSC">EMSC 　　　　　　　　　</label>
-        <label class="switch">
-          <input type="checkbox" id="sourceEMSC" checked />
-          <span class="slider"></span>
-        </label>
-        <span id="status-sourceEMSC" class="connection-status">状態不明</span> <!-- 追加 -->
-      </div>
+              <label class="toggle-label" for="sourceCWA">中央気象署（台湾）重大　</label>
+              <label class="switch">
+                <input type="checkbox" id="sourceCWA" checked />
+                <span class="slider"></span>
+              </label>
+              <span id="status-sourceCWA" class="connection-status">状態不明</span> <!-- 追加 -->
+            </div>
+            <div class="toggle-container">
+              <label class="toggle-label" for="sourceCWA_tiny">中央気象署（台湾）小区域</label>
+              <label class="switch">
+                <input type="checkbox" id="sourceCWA_tiny" checked />
+                <span class="slider"></span>
+              </label>
+              <span id="status-sourceCWA_tiny" class="connection-status">状態不明</span> <!-- 追加 -->
+            </div>
+            <div class="toggle-container">
+              <label class="toggle-label" for="sourceEMSC">EMSC　　　　　　　　　　</label>
+              <label class="switch">
+                <input type="checkbox" id="sourceEMSC" checked />
+                <span class="slider"></span>
+              </label>
+              <span id="status-sourceEMSC" class="connection-status">状態不明</span> <!-- 追加 -->
+            </div>
 
             <h4 style="margin-top: 20px">通知設定</h4>
             <div class="toggle-container">
@@ -349,13 +369,7 @@
               <label class="toggle-label" for="magThreshold">通知マグニチュード閾値:</label>
               <input type="number" id="magThreshold" min="0" step="0.1" value="1.0" />
             </div>
-            <h4 style="margin-top: 20px">データ取得設定</h4>
-            <div style="margin-top: 10px">
-              <label for="intervalInput">自動取得間隔（秒）:</label>
-              <input type="number" id="intervalInput" min="1" value="30" style="width: 60px; margin-right: 10px" />
-              <button id="startButton">開始</button>
-              <button id="stopButton" style="margin-left: 5px">停止</button>
-            </div>
+
 
             <h4 style="margin-top: 20px">テーマ設定</h4>
             <div class="toggle-container">
@@ -366,64 +380,7 @@
               </label>
             </div>
 
-            <!-- 地図表示設定 (既存) -->
-            <h4 style="margin-top: 20px">地図表示設定</h4>
-            <div class="toggle-container">
-              <label class="toggle-label" for="showCwaTinyMarkers">CWA 小区域地震</label>
-              <label class="switch">
-                <input type="checkbox" id="showCwaTinyMarkers" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="toggle-container">
-              <label class="toggle-label" for="showCwaMarkers">CWA 地震</label>
-              <label class="switch">
-                <input type="checkbox" id="showCwaMarkers" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="toggle-container">
-              <label class="toggle-label" for="showUsgsMarkers">USGS 地震</label>
-              <label class="switch">
-                <input type="checkbox" id="showUsgsMarkers" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="toggle-container">
-              <label class="toggle-label" for="showBmkgMarkers">BMKG 地震</label>
-              <label class="switch">
-                <input type="checkbox" id="showBmkgMarkers" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="toggle-container">
-              <label class="toggle-label" for="showBmkgM5Markers">BMKG M5.0+ 地震</label>
-              <label class="switch">
-                <input type="checkbox" id="showBmkgM5Markers" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="toggle-container">
-              <label class="toggle-label" for="showJmaMarkers">JMA 地震 (例)</label>
-              <label class="switch">
-                <input type="checkbox" id="showJmaMarkers" />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="toggle-container">
-              <label class="toggle-label" for="showCencMarkers">CENC 地震 (例)</label>
-              <label class="switch">
-                <input type="checkbox" id="showCencMarkers" checked />
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="toggle-container">
-              <label class="toggle-label" for="showEmscMarkers">EMSC 地震 (例)</label>
-              <label class="switch">
-                <input type="checkbox" id="showEmscMarkers" />
-                <span class="slider"></span>
-              </label>
-            </div>
+
             <button id="applyMapSettings" style="margin-top: 10px">
               設定を適用
             </button>
