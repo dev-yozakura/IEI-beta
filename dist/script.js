@@ -472,31 +472,6 @@ function updateCwaTinyEqList(data) {
   lastUpdateTimes.cwaEq_tiny = new Date();
   updateCombinedDisplay();
 }
-// 四川地震局 地震警報表示更新
-function updateScEewDisplay(data) {
-  if (data.Cancel) {
-    combinedData.scEew = null;
-  } else {
-    combinedData.scEew = data;
-    checkAndNotify(data, "sc_eew"); // ✅ 通知を送信
-  }
-
-  lastUpdateTimes.scEew = new Date();
-  updateCombinedDisplay();
-}
-
-// 福建地震局 地震警報表示更新
-function updateFjEewDisplay(data) {
-  if (data.isCancel) {
-    combinedData.fjEew = null;
-  } else {
-    combinedData.fjEew = data;
-    checkAndNotify(data, "fj_eew"); // ✅ 通知を送信
-  }
-
-  lastUpdateTimes.fjEew = new Date();
-  updateCombinedDisplay();
-}
 
 //EMSC 地震情報表示更新
 function updateEmscEqList(data) {
@@ -521,7 +496,12 @@ function updateEmscEqList(data) {
     const date = new Date(props.time);
     // JST（UTC+9）に変換
     const jstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-
+    const distance = epicentralDistance(
+      props.lat,
+      props.lon,
+      here.lat,
+      here.lon
+    );
     // 年/月/日 時:分:秒 形式にフォーマット
     const formattedtime = jstDate
       .toISOString()
@@ -553,6 +533,7 @@ function updateEmscEqList(data) {
       // 必要に応じて他のプロパティも追加可能
       Title: props.flynn_region || "EMSC 地震", // 表示用タイトル
       // intensity: props.intensity || "情報なし", // 必要に応じて
+      distance: distance.toFixed(2), // ✅ 距離を追加
     };
 
     // ✅ ID をキーとして格納して履歴を保持
@@ -570,38 +551,6 @@ function updateEmscEqList(data) {
   // else の場合の処理は特に必要ないかもしれませんが、念のため updateCombinedDisplay は呼び出す
   emscLastUpdate = new Date();
   updateCombinedDisplay(); // ✅ 統合表示を更新
-}
-
-//JMA Hypo 地震情報表示更新
-function updateJmaHypoList(data) {
-  if (data && data.features && Array.isArray(data.features)) {
-    return data.features.map((feature) => {
-      const props = feature.properties;
-      const coords = feature.geometry.coordinates;
-      return {
-        // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
-        id: props.eid, // ✅ IDを追加
-        source: "jma_geojson", // ✅ ソースを明示
-        displayType: "eq", // ✅ 表示タイプを明示
-        time: props.origin_time, // 発生時刻
-        // time_full: props.origin_time, // 必要に応じて追加
-        location: props.name || "不明",
-        magnitude:
-          props.magnitude !== undefined && props.magnitude !== null
-            ? props.magnitude
-            : "不明",
-        depth: coords[2] !== null ? (coords[2] / 1000).toFixed(1) : "不明", // kmに変換
-        lat: coords[1],
-        lng: coords[0],
-        intensity: props.intensity || "なし", // 最大震度 (あれば)
-        // 必要に応じて他のプロパティも追加
-        // title: props.ttl || `M${props.magnitude} 地震`, // タイトル
-        // json: props.json, // 詳細JSONパス
-        // ... propsの他のフィールド
-      };
-    });
-  }
-  return [];
 }
 
 // USGS 地震情報表示更新
@@ -867,6 +816,7 @@ async function fetchUsgsData() {
         const lat = coordinates[1]?.toFixed(4) || "情報なし";
         const depth = coordinates[2]?.toFixed(2) || "情報なし";
 
+        const distance = epicentralDistance(lat, lon, here.lat, here.lon);
         // マグニチュードの変換
         const magnitude =
           props.mag !== undefined ? props.mag.toFixed(2) : "情報なし";
@@ -895,6 +845,7 @@ async function fetchUsgsData() {
           displayType: "eq",
           source: "usgs",
           net: props.net || "情報なし", // ネットワーク
+          distance: distance.toFixed(2), // 距離
         });
       });
     }
@@ -956,6 +907,8 @@ async function fetchCwaData() {
           EarthquakeInfo.Epicenter.EpicenterLongitude.toFixed(4) || "情報なし";
 
         const ReportContent = item.ReportContent || "情報なし";
+
+        const distance = epicentralDistance(lat, lon, here.lat, here.lon);
         if (IsEng === 2) {
           const match = ReportContent.match(/Highest intensity was \d+/);
           if (match) {
@@ -973,6 +926,7 @@ async function fetchCwaData() {
               lng: lon,
               displayType: "eq",
               source: "cwa",
+              distance: distance.toFixed(2),
             });
           }
         } else {
@@ -1040,6 +994,7 @@ async function fetchCwaTinyData() {
           EarthquakeInfo.Epicenter.EpicenterLongitude.toFixed(4) || "情報なし";
 
         const ReportContent = item.ReportContent || "情報なし";
+        const distance = epicentralDistance(lat, lon, here.lat, here.lon);
         if (IsEng === 2) {
           const match = ReportContent.match(/Highest intensity was \d+/);
           let highestIntensity = "";
@@ -1058,6 +1013,7 @@ async function fetchCwaTinyData() {
               lng: lon,
               displayType: "eq",
               source: "cwa_tiny",
+              distance: distance.toFixed(2),
             });
           }
         } else {
@@ -1477,6 +1433,7 @@ async function fetchBmkgData() {
         const lat = coords[0] || "情報なし";
         const lon = coords[1] || "情報なし";
 
+        const distance = epicentralDistance(lat, lon, here.lat, here.lon);
         // 震度情報の抽出（ローマ数字を抽出）
         const intensityMatch = item.Dirasakan?.match(
           /([IVX]+|I|II|III|IV|V|VI|VII|VIII|IX|X)\s/g
@@ -1503,6 +1460,7 @@ async function fetchBmkgData() {
           feltDetails: item.Dirasakan,
           displayType: "eq",
           source: "bmkg",
+          distance: distance.toFixed(2), // 距離を追加
         });
       });
     }
@@ -1536,7 +1494,7 @@ async function fetchBmkg_M5Data() {
           : ["情報なし", "情報なし"];
         const lat = coords[0] || "情報なし";
         const lon = coords[1] || "情報なし";
-
+        const distance = epicentralDistance(lat, lon, here.lat, here.lon);
         // 震度情報の抽出（ローマ数字を抽出）
         const intensityMatch = item.Dirasakan?.match(
           /([IVX]+|I|II|III|IV|V|VI|VII|VIII|IX|X)\s/g
@@ -1558,6 +1516,7 @@ async function fetchBmkg_M5Data() {
           tsunamiPotential: item.Potensi, // フィールド名を小文字に統一
           displayType: "eq",
           source: "bmkg_m5",
+          distance: distance.toFixed(2), // 距離を追加
         });
       });
     }
@@ -1679,12 +1638,19 @@ function updateCombinedDisplay() {
   // JMA 地震情報リスト
   if (showJmaEqList && combinedData.jmaEqList) {
     Object.values(combinedData.jmaEqList).forEach((item) => {
+      const distance = epicentralDistance(
+        item.latitude,
+        item.longitude,
+        here.lat,
+        here.lon
+      );
       // typeフィールドを除外
       if (item && item.Title) {
         allData.push({
           ...item,
           source: "jma",
           displayType: "eq",
+          distance: distance.toFixed(2),
         });
       }
     });
@@ -1769,7 +1735,10 @@ function updateCombinedDisplay() {
         valueA = getDepthNumber(a.Depth || a.depth || "情報なし");
         valueB = getDepthNumber(b.Depth || b.depth || "情報なし");
         break;
-
+      case "distance":
+        valueA = parseFloat(a.distance || "0");
+        valueB = parseFloat(b.distance || "0");
+        break;
       default:
         valueA = new Date(
           a.OriginTime || a.time || a.ReportTime || a.published
@@ -1862,7 +1831,7 @@ function updateCombinedDisplay() {
       html += `<p class="time">発生時刻: ${item.time}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
-      html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
       html += `<p class="source">情報源: ShakeAlert</p>`;
     }
     // 中央気象署（台湾）(tiny含む)地震情報
@@ -1875,7 +1844,7 @@ function updateCombinedDisplay() {
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
       html += `<p>最大震度: ${getIntersityLabel_j(item.intensity)}</p>`;
-      html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
       //html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: 中央気象署（台湾）</p>`;
     }
@@ -1891,7 +1860,7 @@ function updateCombinedDisplay() {
       if (item.intensity !== "情報なし") {
         html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
       }
-      html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
       // html += `<p>緯度: ${item.lat}, 経度: ${item.lng}</p>`;
       html += `<p class="source">情報源: USGS (${item.net})</p>`;
     }
@@ -1905,7 +1874,7 @@ function updateCombinedDisplay() {
       // 震度表示
       if (item.intensity && item.intensity !== "情報なし") {
         html += `<p>最大震度: ${getIntersityLabel(item.intensity)}</p>`;
-        html += `<p>深さ: ${item.depth} km</p>`;
+        html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
       }
 
       // 感じた地域の詳細
@@ -1925,7 +1894,7 @@ function updateCombinedDisplay() {
       html += `<p class="time">発生時刻: ${item.Tanggal} ${item.Jam}</p>`;
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
-      html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
 
       // 津波の可能性（Potensi → tsunamiPotential）
       html += `<p>津波の可能性: ${item.tsunamiPotential}</p>`;
@@ -1945,7 +1914,7 @@ function updateCombinedDisplay() {
         html += `<p>最大烈度: ${getIntersityLabel(item.intensity)}</p>`;
       }
 
-      html += `<p>深さ: ${item.depth} </p>`;
+      html += `<p>深さ: ${item.depth} 距離: ${item.distance} km</p>`;
       //html += `<p>緯度: ${item.latitude}, 経度: ${item.longitude}</p>`;
 
       html += `<p class="source">情報源: 日本気象庁</p>`;
@@ -2017,6 +1986,7 @@ function updateCombinedDisplay() {
       html += `<p class="time">発表時刻: ${item.ReportTime}</p>`;
       html += `<p class="location">震源地: ${item.HypoCenter}</p>`;
       html += `<p>マグニチュード: ${item.Magunitude}</p>`;
+      html += `<p>距離: ${item.distance || "情報なし"} km</p>`;
 
       // 小数震度を正しく表示
       if (item.MaxIntensity) {
@@ -2033,6 +2003,7 @@ function updateCombinedDisplay() {
       html += `<p class="time">発表時刻: ${item.ReportTime}</p>`;
       html += `<p class="location">震源地: ${item.HypoCenter}</p>`;
       html += `<p>マグニチュード: ${item.Magunitude}</p>`;
+      html += `<p>距離: ${item.distance || "情報なし"} km</p>`;
       html += `<p class="source">情報源: 福建地震局</p>`;
     }
 
@@ -2085,7 +2056,9 @@ function updateCombinedDisplay() {
         html += `<p class="source">情報源: 日本気象庁</p>`;
       } else if (item.intensity) {
         html += `<p>最大烈度: ${getIntersityLabel(item.intensity)}</p>`;
-        html += `<p>深さ: ${item.depth || "情報なし"} km</p>`;
+        html += `<p>深さ: ${item.depth || "情報なし"} km 距離: ${
+          item.distance || "情報なし"
+        } km</p>`;
         html += `<p class="source">情報源: 中国地震台網</p>`;
       }
     }
@@ -2096,7 +2069,9 @@ function updateCombinedDisplay() {
       // updateEmscEqList で変換された統一構造のプロパティを使用
       html += `<h3>${item.magtype} ${item.magnitude} - ${item.location}</h3>`; // <-- item.Title, item.location
       html += `<p class="time">発生時刻: ${item.time || "情報なし"}</p>`; // <-- item.time
-      html += `<p>深さ: ${item.depth || "情報なし"} km</p>`; // <-- item.depth
+      html += `<p>深さ: ${item.depth || "情報なし"} km 距離: ${
+        item.distance || "情報なし"
+      } km</p>`; // <-- item.depth
       // 緯度経度を表示したい場合は以下を追加
       // html += `<p>緯度: ${item.lat || "情報なし"}, 経度: ${item.lng || "情報なし"}</p>`; // <-- item.lat, item.lng
       html += `<p class="source">情報源: EMSC (${item.auth || ""})</p>`; // <-- item.source を使うことも可能: `情報源: ${item.source.toUpperCase()}`
@@ -2107,7 +2082,7 @@ function updateCombinedDisplay() {
       // html += `<h3>${item.Title}</h3>`;
       html += `<h3>M${item.magtype} ${item.magnitude} - ${item.location}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
-      html += `<p>深さ: ${item.depth} km</p>`;
+      html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
       html += `<p class="source">情報源: 気象庁 GeoJSON</p>`;
       //html += `<p>緯度: ${item.lat || "情報なし"}, 経度: ${item.lng || "情報なし"}</p>`;
     }
@@ -2250,19 +2225,45 @@ function updateScEewDisplay(data) {
   if (data.Cancel) {
     combinedData.scEew = null;
   } else {
+    // distanceを計算
+    const distance = epicentralDistance(
+      data.Latitude,
+      data.Longitude,
+      here.lat,
+      here.lon
+    );
+
+    // dataオブジェクトにdistanceを追加
+    data.distance = distance.toFixed(2); // 距離を追加
+
     combinedData.scEew = data;
+    checkAndNotify(data, "sc_eew");
   }
+
   lastUpdateTimes.scEew = new Date();
   updateCombinedDisplay();
 }
 
 // 福建地震局 地震警報表示更新
 function updateFjEewDisplay(data) {
-  if (data.isCancel) {
+  if (data.Cancel) {
     combinedData.fjEew = null;
   } else {
+    // distanceを計算
+    const distance = epicentralDistance(
+      data.Latitude,
+      data.Longitude,
+      here.lat,
+      here.lon
+    );
+
+    // dataオブジェクトにdistanceを追加
+    data.distance = distance.toFixed(2); // 距離を追加
+
     combinedData.fjEew = data;
+    checkAndNotify(data, "fj_eew");
   }
+
   lastUpdateTimes.fjEew = new Date();
   updateCombinedDisplay();
 }
@@ -2385,7 +2386,14 @@ function updateCencEqList(data) {
 
   Array.from({ length: 50 }, (_, i) => `No${i + 1}`).forEach((key) => {
     if (data.hasOwnProperty(key)) {
+      const distance = epicentralDistance(
+        data[key].latitude,
+        data[key].longitude,
+        here.lat,
+        here.lon
+      );
       combinedData.cencEqList[key] = data[key];
+      combinedData.cencEqList[key].distance = distance.toFixed(2);
       const utc8time = new Date(data[key].time + " UTC+8");
       combinedData.cencEqList[key].time = utc8time.toLocaleString();
     }
@@ -2477,7 +2485,12 @@ function connectshakealert() {
       if (fullData && fullData.Data) {
         const data = fullData.Data;
         // 必要に応加えてMD5チェックも可能: fullData.md5
-
+        const distance = epicentralDistance(
+          data.latitude,
+          data.longitude,
+          here.lat,
+          here.lon
+        );
         // 受信したデータを統一構造に変換
         const convertedData = {
           id: data.id || `shakealert_${new Date(data.shockTime).getTime()}`, // 固有ID、なければ生成
@@ -2504,6 +2517,7 @@ function connectshakealert() {
           Title: `M${data.magnitude} - ${data.placeName}`, // 表示用タイトル
           // location: data.placeName || "不明", // location フィールドも追加可能
           time: data.shockTime || "不明", // 統合表示用 time フィールド
+          distance: distance.toFixed(2), // 震源からの距離 (km)
         };
 
         // 統合データオブジェクトに格納 (例: combinedData オブジェクトの shakealertData プロパティ)
@@ -3756,6 +3770,12 @@ async function fetchJmaHypoData(daysBack = 7) {
           return data.features.map((feature) => {
             const props = feature.properties;
             const coords = feature.geometry.coordinates;
+            const distance = epicentralDistance(
+              coords[1],
+              coords[0],
+              here.lat,
+              here.lon
+            );
             return {
               // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
               id: props.eid, // ✅ IDを追加
@@ -3769,6 +3789,7 @@ async function fetchJmaHypoData(daysBack = 7) {
               depth: props.dep, // kmに変換
               lat: coords[1],
               lng: coords[0],
+              distance: distance.toFixed(2), // 震央距離 (km)
               intensity: props.intensity || "なし", // 最大震度 (あれば)
               // 必要に応じて他のプロパティも追加
               // title: props.ttl || `M${props.magnitude} 地震`, // タイトル
@@ -3852,6 +3873,7 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
           mag = item.properties.mag;
           location = item.properties.place || "不明";
           source = "USGS";
+          time = new Date(item.properties.time);
         }
         // JMA GeoJSON 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
         else if (item.lat !== undefined && item.lng !== undefined) {
@@ -3861,6 +3883,7 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
           mag = parseFloat(item.magnitude);
           location = item.location || item.Title || "不明";
           source = item.source || "不明";
+          time = new Date(item.time);
         }
         // EMSC 形式 (例) - Pasted_Text_1753587131703.txt に基づくプロパティ名
         else if (item.type === "Feature" && item.geometry && item.properties) {
@@ -3873,6 +3896,7 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
             location =
               item.properties.place || item.properties.flynn_region || "不明";
             source = "EMSC";
+            time = new Date(item.properties.time);
           }
         }
         // 他の形式 (例: CENC, BMKG, CWA 等) もここに追加
@@ -3885,11 +3909,12 @@ function updatePlotlyGraph(containerId = "plotly-graph-2-1") {
           depths.push(-depth); // Plotly では深さを負の値で表現するのが一般的 (奥がマイナス)
           magnitudes.push(mag);
           hoverTexts.push(
-            `場所: ${location}<br>緯度: ${lat.toFixed(
-              4
-            )}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(
-              1
-            )} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`
+            `時刻: ${time.toLocaleString()}<br>` +
+              `場所: ${location}<br>緯度: ${lat.toFixed(
+                4
+              )}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(
+                1
+              )} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`
           );
           sourceInfo.push(source); // 情報源を分類に使用
         }
@@ -4274,6 +4299,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
           mag = parseFloat(item.properties.mag);
           location = item.properties.place || "不明";
           source = "USGS";
+          time = new Date(item.properties.time);
         } else if (item.lat !== undefined && item.lng !== undefined) {
           // JMA
           lat = parseFloat(item.lat);
@@ -4282,6 +4308,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
           mag = parseFloat(item.magnitude);
           location = item.location || item.Title || "不明";
           source = item.source || "不明";
+          time = new Date(item.time);
         } else if (
           item.type === "Feature" &&
           item.geometry &&
@@ -4297,6 +4324,7 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
             location =
               item.properties.place || item.properties.flynn_region || "不明";
             source = "EMSC";
+            time = new Date(item.properties.time);
           }
         }
         // ... 他の形式 ...
@@ -4307,11 +4335,12 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
           depths.push(depth);
           magnitudes.push(mag);
           hoverTexts.push(
-            `場所: ${location}<br>緯度: ${lat.toFixed(
-              4
-            )}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(
-              1
-            )} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`
+            `時刻: ${time.toLocaleString()}<br>` +
+              `場所: ${location}<br>緯度: ${lat.toFixed(
+                4
+              )}<br>経度: ${lon.toFixed(4)}<br>深さ: ${depth.toFixed(
+                1
+              )} km<br>マグニチュード: ${mag.toFixed(1)}<br>情報源: ${source}`
           );
           sourceInfo.push(source);
 
@@ -5173,3 +5202,28 @@ function updateConnectionStatusDisplay() {
 
   console.log("Connections state:", connections); // デバッグ用
 }
+
+function toRadians(degrees) {
+  return (degrees * Math.PI) / 180;
+}
+function epicentralDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // 地球の半径（km）
+
+  const φ1 = toRadians(lat1);
+  const φ2 = toRadians(lat2);
+  const Δφ = toRadians(lat2 - lat1);
+  const Δλ = toRadians(lon2 - lon1);
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // km
+}
+
+const here = {
+  lat: 34.717065, // 大阪駅の緯度
+  lon: 135.497329, // 大阪駅の経度
+};
