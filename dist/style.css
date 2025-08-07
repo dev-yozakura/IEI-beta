@@ -1113,7 +1113,14 @@ input:checked + .slider:before {
     border-radius: 6px;
     padding: 15px;
     margin-bottom: 15px;
-    background-color: #ffc800; /* 津波情報項目の背景 */
+    background-color: #e0b61d; /* 津波情報項目の背景 */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}.tsunami-item-MajorWarning {
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #8800ff; /* 津波情報項目の背景 */
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
@@ -1136,6 +1143,10 @@ input:checked + .slider:before {
 /* 注意報 */
 .tsunami-grade-watch {
     color: #ffd740; /* 明るい黄色/琥珀色 */
+}
+/*大津波警報 */
+.tsunami-grade-majorwarning {
+    color: #8800ff; /* 明るい紫 */
 }
 /* 解除 */
 .no-tsunami-warning {
