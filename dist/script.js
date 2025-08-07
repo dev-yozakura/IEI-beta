@@ -2,7 +2,9 @@ let HypoDate = 0;
 let IsEng = 2; // 1:中国語, 2:英語
 let allData = [];
 let magmin = 0; // マグニチュードの最小値
-let magmax = 10; // マグニチュードの最大値
+let magmax = 10; // マグニチュードの最大値let datemin = null; // 日時の最小値 (Date オブジェクトまたは null)
+let datemax = null; // 日時の最大値 (Date オブジェクトまたは null)
+
 // ファイルの先頭付近にグローバル変数を宣言
 let latestTsunamiInfo = null; // 既存
 let tsunamiAreaGeoJson = null; // <-- 追加: 津波区域GeoJSONデータ用
@@ -1766,12 +1768,26 @@ function updateCombinedDisplay() {
   // === 修正箇所 3 (オプション): 地図マーカーの更新条件を確認 ===
   // 関数を呼び出して地図を表示 (地図が初期化されており、かつ tab2 がアクティブな場合のみ)
   // 地図マーカーの更新 (tab2がアクティブな場合)
-  const isTab2Active = document.getElementById("tab2")?.classList.contains("active");
+  const isTab2Active = document
+    .getElementById("tab2")
+    ?.classList.contains("active");
   if (map && isTab2Active) {
-    console.log("updateCombinedDisplay: 地図にマーカーを表示します (tab2 アクティブ)");
+    console.log(
+      "updateCombinedDisplay: 地図にマーカーを表示します (tab2 アクティブ)"
+    );
     // 修正後: allData 配列を直接渡す
     initMapWithMarkers(map, allData);
-  } else if (map) {
+     // === 改良: 津波情報が更新されたときのみレイヤーを更新 ===
+    // (これは簡略化した例です。実際には、latestTsunamiInfo の前回値を保持・比較するロジックが必要です)
+    // または、津波情報取得関数 (fetchTsunamiData) 内でのみ updateTsunamiLayerOnMap を呼び出す
+    // ここでは、津波情報が存在する場合のみ更新するように限定
+  fetchTsunamiData()
+    .then(() => {
+      if (latestTsunamiInfo) {
+             updateTsunamiLayerOnMap();
+           }
+    })
+    // === 改良 ここまで ===else if (map) {
     // tab2 非アクティブ時もマーカーデータを更新したい場合 (オプション)
     // initMapWithMarkers(map, allData);
   } else {
@@ -1804,7 +1820,7 @@ function updateCombinedDisplay() {
     console.log("データ更新: tab2.2 がアクティブのため球面グラフを更新します");
     updatePlotlySphereGraph("plotly-graph-2-2"); // ✅ 関数名とIDを一致させる
   }
-  
+
   // 各項目を表示
   allData.forEach((item, index) => {
     const container = document.createElement("div");
@@ -2387,27 +2403,32 @@ function updateJmaEqList(data) {
 
     // --- 修正箇所 ここから ---
     // item.depth が文字列で "km" を含む場合、数値部分のみを抽出
-    if (typeof originalItem.depth === 'string' && originalItem.depth.includes('km')) {
-       // 数字（整数または小数）を抽出する正規表現
-       const depthMatch = originalItem.depth.match(/^([0-9]+\.?[0-9]*)/);
-       if (depthMatch && depthMatch[1] !== undefined) {
-         // 抽出した数値文字列を parseFloat で数値に変換し、格納
-         processedItem.depth = parseFloat(depthMatch[1]);
-         // console.log(`Depth for ${key} converted from "${originalItem.depth}" to ${processedItem.depth}`);
-       } else {
-         // 数値が抽出できなかった場合のフォールバック (例: "km" のみなど)
-         console.warn(`JMA Eq List: ${key} の depth "${originalItem.depth}" から数値を抽出できませんでした。元の値を保持します。`);
-         // 必要に応じて、processedItem.depth = null; などに設定することも可能
-       }
-    } else if (typeof originalItem.depth === 'string') {
-        // "km" が含まれていないが文字列の場合、数値に変換を試みる
-        const parsedDepth = parseFloat(originalItem.depth);
-        if (!isNaN(parsedDepth)) {
-            processedItem.depth = parsedDepth;
-        } else {
-            // 数値に変換できない文字列 ("情報なし" など) はそのまま保持 or 特別処理
-            // console.log(`JMA Eq List: ${key} の depth "${originalItem.depth}" は数値に変換できません。`);
-        }
+    if (
+      typeof originalItem.depth === "string" &&
+      originalItem.depth.includes("km")
+    ) {
+      // 数字（整数または小数）を抽出する正規表現
+      const depthMatch = originalItem.depth.match(/^([0-9]+\.?[0-9]*)/);
+      if (depthMatch && depthMatch[1] !== undefined) {
+        // 抽出した数値文字列を parseFloat で数値に変換し、格納
+        processedItem.depth = parseFloat(depthMatch[1]);
+        // console.log(`Depth for ${key} converted from "${originalItem.depth}" to ${processedItem.depth}`);
+      } else {
+        // 数値が抽出できなかった場合のフォールバック (例: "km" のみなど)
+        console.warn(
+          `JMA Eq List: ${key} の depth "${originalItem.depth}" から数値を抽出できませんでした。元の値を保持します。`
+        );
+        // 必要に応じて、processedItem.depth = null; などに設定することも可能
+      }
+    } else if (typeof originalItem.depth === "string") {
+      // "km" が含まれていないが文字列の場合、数値に変換を試みる
+      const parsedDepth = parseFloat(originalItem.depth);
+      if (!isNaN(parsedDepth)) {
+        processedItem.depth = parsedDepth;
+      } else {
+        // 数値に変換できない文字列 ("情報なし" など) はそのまま保持 or 特別処理
+        // console.log(`JMA Eq List: ${key} の depth "${originalItem.depth}" は数値に変換できません。`);
+      }
     }
     // item.depth がすでに数値の場合は、特に変更しない
     // --- 修正箇所 ここまで ---
@@ -3028,6 +3049,7 @@ function startAutoFetch() {
   if (!jmaXmlLastUpdate) {
     fetchJmaXmlData();
   }
+  fetchTsunamiData();
 
   alert(`${interval}秒ごとに自動取得を開始しました`);
 }
@@ -3269,12 +3291,22 @@ function initMap() {
   console.log("タイルレイヤーを追加しました");
 
   // === 追加: 津波GeoJSONデータの取得 (地図初期化時) ===
-  fetchTsunamiAreaGeoJson().then(() => {
-    // 津波データ取得後、津波レイヤーを初期化 (まだ警報情報はない)
-    if (map) {
-      updateTsunamiLayerOnMap(); // 初期状態のレイヤーを追加
-    }
-  });
+ // initMap 関数内...
+console.log("🌊 津波区域GeoJSONデータの読み込みを開始します...");
+fetchTsunamiAreaGeoJson().then(() => {
+    console.log("✅ 津波区域GeoJSONデータの読み込みが完了しました。");
+    // GeoJSON の読み込みが完了した**後に**、津波情報を取得
+    fetchTsunamiData();
+    console.log("🌊 GeoJSON読み込み後、津波情報を取得開始しました。");
+}).catch(error => {
+    // fetchTsunamiAreaGeoJson 内でエラー処理済みだが、念のため
+    console.error("❌ initMap内で津波区域データ読み込み開始時にエラー:", error);
+    // GeoJSON読み込みに失敗しても、地図自体の初期化は継続
+    // 必要に応じてエラーメッセージを表示
+    // ただし、この状態では津波レイヤーは表示できません
+});
+console.log("🔄 initMap: 津波データ取得の待機を開始しました。");
+// ... 他の地図初期化処理 ...
   // === 追加 ここまで ===
   // 2. プレート境界をGeoJSONで追加
   fetch(
@@ -3345,41 +3377,43 @@ function createMarker(markerData) {
     popupAnchor: [0, -iconSize[1]],
   });
 
-const popupContent = // ポップアップ/ツールチップに表示する内容は同じ
-  (markerData.time || markerData.OriginTime || "時間不明") +
-  "<br>" +
-  (markerData.location ||
-    markerData.HypoCenter ||
-    markerData.Hypocenter ||
-    "場所不明") +
-  "<br>" +
-  `<p>M${magnitude}  深さ: ${markerData.depth || markerData.Depth || "不明"} km</p>` +
-  `<p>情報源: ${markerData.source || "不明"}</p>`;
+  const popupContent = // ポップアップ/ツールチップに表示する内容は同じ
+    (markerData.time || markerData.OriginTime || "時間不明") +
+    "<br>" +
+    (markerData.location ||
+      markerData.HypoCenter ||
+      markerData.Hypocenter ||
+      "場所不明") +
+    "<br>" +
+    `<p>M${magnitude}  深さ: ${
+      markerData.depth || markerData.Depth || "不明"
+    } km</p>` +
+    `<p>情報源: ${markerData.source || "不明"}</p>`;
 
-// マーカーを作成
-const marker = L.marker([lat, lng], { icon: customIcon });
+  // マーカーを作成
+  const marker = L.marker([lat, lng], { icon: customIcon });
 
-// --- 変更箇所 ここから ---
-// ホバーツールチップをバインド (カーソルを合わせたときに表示)
-// オプションで、クリック用のポップアップも同時にバインドできます。
-marker.bindTooltip(popupContent, {
-  permanent: false,     // true にすると常に表示、false でホバー時のみ
-  direction: 'top',     // ツールチップの表示方向 ('top', 'bottom', 'left', 'right', 'center', 'auto')
-  offset: [0, -10],     // アイコンからのオフセット [x, y] (ピクセル)
-  opacity: 0.9          // ツールチップの透明度
-});
+  // --- 変更箇所 ここから ---
+  // ホバーツールチップをバインド (カーソルを合わせたときに表示)
+  // オプションで、クリック用のポップアップも同時にバインドできます。
+  marker.bindTooltip(popupContent, {
+    permanent: false, // true にすると常に表示、false でホバー時のみ
+    direction: "top", // ツールチップの表示方向 ('top', 'bottom', 'left', 'right', 'center', 'auto')
+    offset: [0, -10], // アイコンからのオフセット [x, y] (ピクセル)
+    opacity: 0.9, // ツールチップの透明度
+  });
 
-// (オプション) クリックでもポップアップを表示したい場合はこちらも残す
-// marker.bindPopup(popupContent);
-// --- 変更箇所 ここまで ---
+  // (オプション) クリックでもポップアップを表示したい場合はこちらも残す
+  // marker.bindPopup(popupContent);
+  // --- 変更箇所 ここまで ---
 
-return marker;
-  
+  return marker;
 }
 
 // 地図にマーカーを表示する関数 (修正版)
 // 引数を combinedData オブジェクトから、フラットなマーカーデータ配列 markerDataArray に変更
-function initMapWithMarkers(map, markerDataArray) { // 引数名変更
+function initMapWithMarkers(map, markerDataArray) {
+  // 引数名変更
   if (!map) {
     console.warn("initMapWithMarkers: 地図が初期化されていません");
     return;
@@ -3401,7 +3435,8 @@ function initMapWithMarkers(map, markerDataArray) { // 引数名変更
   // これには updateCombinedDisplay で allData に格納された統合・フィルタリング済みのデータが渡されることを想定
   console.log(`処理対象マーカー数: ${markerDataArray.length}`); // ログも更新
 
-  markerDataArray.forEach((markerData) => { // markerDataArray をループ
+  markerDataArray.forEach((markerData) => {
+    // markerDataArray をループ
     try {
       const marker = createMarker(markerData);
       if (marker) {
@@ -3635,13 +3670,6 @@ document.addEventListener("DOMContentLoaded", function () {
         // === 修正箇所 2 ここまで ===
       });
     });
-
-
-
-  
-
-  
-  
 
     function updateIndicator() {
       const activeButton = document.querySelector(".tab-btn.active");
@@ -4127,6 +4155,8 @@ function updatePlotlySphereGraph(containerId = "plotly-graph-2-2") {
                   ? "red"
                   : grade === "Watch"
                   ? "orange"
+                  : grade === "MajorWarning"
+                  ? "purple"
                   : "yellow";
               const text = `${regionName}<br>警報等級: ${grade}${
                 immediate ? " (直ちに来襲)" : ""
@@ -4711,7 +4741,9 @@ async function fetchTsunamiData() {
   tsunamiStatusElement.textContent = "更新中...";
 
   try {
-    const response = await fetch("https://api.p2pquake.net/v2/jma/tsunami");
+    const response = await fetch(
+      "https://api.p2pquake.net/v2/history?codes=552"
+    );
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -4731,7 +4763,27 @@ async function fetchTsunamiData() {
 
     // APIは配列を返すが、通常最新の1件のみ表示
     const latestTsunamiInfo = data[0]; // 最新の情報を取得
+    // === 追加: デバッグ用ログ ===
+    console.log(
+      "📡 APIから取得した最新の津波情報 (latestTsunamiInfo):",
+      latestTsunamiInfo
+    );
+    // === 追加 ここまで ===
 
+    // latestTsunamiInfo をグローバル変数に格納 (既存コード)
+   window.latestTsunamiInfo = latestTsunamiInfo; // グローバル変数に保存
+
+// --- 追加開始 ---
+// 1. GeoJSONデータがまだ読み込まれていない場合の処理
+
+
+// 3. GeoJSONデータが存在する場合のみ、レイヤーを更新
+if (map) {
+    updateTsunamiLayerOnMap();
+    console.log("🔁 fetchTsunamiData: 津波データ取得後、レイヤーを更新しました。");
+}
+// --- 追加終了 ---
+    // === 追加 ここまで ===
     if (latestTsunamiInfo.cancelled) {
       tsunamiDataContainer.innerHTML = `
                             <div class="tsunami-item">
@@ -4766,34 +4818,41 @@ async function fetchTsunamiData() {
           ? "【警報】"
           : area.grade === "Watch"
           ? "【注意報】"
+          : area.grade === "MajorWarning"
+          ? "【大津波警報】"
           : area.grade;
+
       const gradeClass =
         area.grade === "Warning"
           ? "tsunami-grade-warning"
           : area.grade === "Watch"
           ? "tsunami-grade-watch"
+          : area.grade === "MajorWarning"
+          ? "tsunami-grade-majorwarning"
           : "";
       const gradeitem =
         area.grade === "Warning"
           ? "tsunami-item-Warning"
           : area.grade === "Watch"
           ? "tsunami-item-Watch"
+          : area.grade === "MajorWarning"
+          ? "tsunami-item-MajorWarning"
           : area.grade;
       const immediateText = area.immediate ? " (すぐ来る)" : "";
-      const firstHeightCondition = area.firstHeight?.condition || "情報なし";
+      const firstHeightCondition = area.firstHeight?.condition || "";
       const firstHeightTime = area.firstHeight?.arrivalTime
-        ? ` (${new Date(area.firstHeight.arrivalTime).toLocaleTimeString(
+        ? ` ${new Date(area.firstHeight.arrivalTime).toLocaleTimeString(
             "ja-JP",
             { hour: "2-digit", minute: "2-digit" }
-          )})`
+          )}`
         : "";
       const maxHeightDescription = area.maxHeight?.description || "情報なし";
 
       htmlContent += `
                             <div class="${gradeitem}">
                                 <div class="tsunami-area-name">${area.name}</div>
-                                <p class="tsunami-grade ${gradeClass}">${gradeText}${immediateText}</p>
-                                <p class="tsunami-height">第1波到達予測: ${firstHeightCondition}${firstHeightTime}</p>
+                                <p class="tsunami-grade ${gradeClass}">${gradeText}</p>
+                                <p class="tsunami-height">第1波到達予測: ${firstHeightCondition}${firstHeightTime}${immediateText}</p>
                                 <p class="tsunami-height">予想最大波高: ${maxHeightDescription}</p>
                             </div>
                         `;
@@ -4809,122 +4868,294 @@ async function fetchTsunamiData() {
 
 // 手動更新ボタン
 refreshBtn.addEventListener("click", fetchTsunamiData);
-// --- 新規関数: 津波区域GeoJSONデータを取得 ---
+// - 新規関数: 津波区域GeoJSONデータを取得 -
 async function fetchTsunamiAreaGeoJson() {
   try {
-    const response = await fetch(
-      "https://www.jma.go.jp/bosai/common/const/geojson/tsunami.json"
-    );
+    // 1. GeoJSONファイルを読み込む
+    // ★★ ファイル名とパスを確認・修正してください ★★
+    const response = await fetch("tsunami.geojson"); // ← ここを確認
+
+    // 2. レスポンスが成功か確認
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(
+        `HTTP error! status: ${response.status} (${response.statusText})`
+      );
     }
-    tsunamiAreaGeoJsonData = await response.json();
-    console.log("津波区域GeoJSONデータを取得しました。");
+
+    // 3. JSONとしてパース
+    const geojsonData = await response.json();
+
+    // 4. 基本的な GeoJSON 構造を確認 (念のため)
+    if (
+      !geojsonData ||
+      geojsonData.type !== "FeatureCollection" ||
+      !Array.isArray(geojsonData.features)
+    ) {
+      throw new Error(
+        "読み込まれたファイルは有効な GeoJSON FeatureCollection ではありません。"
+      );
+    }
+// === 追加: デバッグ用、最初の1,2件のプロパティをログに出力 ===
+console.log("📡 GeoJSONから読み込んだ最初の2件の区域名:", geojsonData.features.slice(0, 2).map(f => f.properties?.name));
+// === 追加 ここまで ===
+    // 5. グローバル変数に格納
+    tsunamiAreaGeoJsonData = geojsonData; // <-- この変数名は既存のコードと一致
+
+    console.log(
+      "✅ 津波区域GeoJSONデータを正常に取得しました。Feature数:",
+      geojsonData.features.length
+    );
+    // alert("津波区域データを読み込みました。"); // デバッグ用
+
+    // 6. 地図レイヤーを更新 (GeoJSONは取得できたが、まだ警報情報はないかもしれない)
+    // 地図が初期化済みなら更新を試みる
+    if (map) {
+      updateTsunamiLayerOnMap();
+    }
   } catch (error) {
-    console.error("津波区域GeoJSONデータの取得エラー:", error);
+    // 7. エラー処理
+    console.error(
+      "❌ 津波区域GeoJSONデータの取得または解析中にエラーが発生しました:",
+      error
+    );
+    alert(
+      `津波区域GeoJSONデータの読み込みに失敗しました。\nエラー: ${error.message}\nファイル名と内容を確認してください。`
+    );
     tsunamiAreaGeoJsonData = null; // エラー時は null に設定
   }
 }
-// --- 新規関数: 地図上に津波レイヤーを追加/更新 ---
+// - 新規関数: 地図上に津波レイヤーを追加/更新 -
 function updateTsunamiLayerOnMap() {
-  // 既存の津波レイヤーがあれば削除
-  if (tsunamiLayer && map.hasLayer(tsunamiLayer)) {
-    map.removeLayer(tsunamiLayer);
-    tsunamiLayer = null;
-    console.log("既存の津波レイヤーを削除しました。");
-  }
+  // updateTsunamiLayerOnMap 関数の最初付近に追加
+console.log("🔍 updateTsunamiLayerOnMap が呼び出されました。");
+console.log(" - window.tsunamiAreaGeoJsonData の状態:", !!window.tsunamiAreaGeoJsonData, `(Feature数: ${window.tsunamiAreaGeoJsonData?.features?.length || 'N/A'})`);
+console.log(" - window.latestTsunamiInfo の状態:", !!window.latestTsunamiInfo);
+if (window.latestTsunamiInfo) {
+    console.log(" - latestTsunamiInfo.cancelled:", window.latestTsunamiInfo.cancelled);
+    console.log(" - latestTsunamiInfo.areas:", window.latestTsunamiInfo.areas);
+    if (Array.isArray(window.latestTsunamiInfo.areas)) {
+        console.log(" - latestTsunamiInfo.areas の名前リスト:", window.latestTsunamiInfo.areas.map(a => `'${a.name}'`));
+    }
+}
+    try {
+      
+        // 1. 既存の津波レイヤーがあれば削除
+        if (tsunamiLayer && map.hasLayer(tsunamiLayer)) {
+            map.removeLayer(tsunamiLayer);
+            tsunamiLayer = null;
+            console.log("🗑️ 既存の津波レイヤーを削除しました。");
+        }
 
-  // データが揃っているかチェック
-  if (
-    !tsunamiAreaGeoJsonData ||
-    !latestTsunamiInfo ||
-    latestTsunamiInfo.cancelled ||
-    !latestTsunamiInfo.areas
-  ) {
-    console.log("津波レイヤーを表示するデータがありません。");
-    return;
-  }
+        // 2. データが揃っているかチェック
+        const latestTsunamiInfo = window.latestTsunamiInfo; // 明示的にグローバル変数から取得
+        if (!latestTsunamiInfo || latestTsunamiInfo.cancelled === true || !Array.isArray(latestTsunamiInfo.areas) || latestTsunamiInfo.areas.length === 0) {
+            console.log("ℹ️ 現在発表中の津波警報情報がありません。区域の境界線のみ表示します。");
+             // 警報がない場合でも、区域の境界線を表示するように変更
+            // スタイルはデフォルトまたは淡色で
+            tsunamiLayer = L.geoJSON(tsunamiAreaGeoJsonData, {
+                style: function (feature) {
+                    return {
+                        color: "#888888", // グレー
+                        weight: 1,
+                        opacity: 0.5,
+                        fillColor: "#cccccc",
+                        fillOpacity: 0.1
+                    };
+                },
+                onEachFeature: function (feature, layer) {
+                    if (feature.properties && feature.properties.name) {
+                        layer.bindPopup(`<b>${feature.properties.name}</b>`);
+                    }
+                }
+            });
+            tsunamiLayer.addTo(map);
+            console.log("🗺️ 津波予報区域の境界線を表示しました (警報なし)。");
+            return;
+        }
 
-  // 1. 警報状況データをマップ化 (区域名 -> {grade, immediate})
-  const tsunamiStatusMap = new Map();
-  latestTsunamiInfo.areas.forEach((area) => {
-    if (area.regions && area.regions.length > 0) {
-      area.regions.forEach((region) => {
-        // APIの区域名をキーとして状態を保存
-        tsunamiStatusMap.set(region.name, {
-          grade: region.grade,
-          immediate: region.immediate,
+        // 3. === デバッグ: APIデータとGeoJSONデータの中身を詳細ログに出力 ===
+        console.log("🔍 updateTsunamiLayerOnMap が呼び出されました。");
+        console.log(" - latestTsunamiInfo.areas の内容 (名前のみ):", latestTsunamiInfo.areas.map(a => a.name));
+        console.log(" - GeoJSON features の最初の5件の name:", tsunamiAreaGeoJsonData.features.slice(0, 5).map(f => f.properties?.name));
+
+        // === 改良版: API区域名リスト作成 (文字列を正規化・トリム) ===
+        const apiRegionNames = new Set();
+        console.log("📡 APIから区域名を抽出中...");
+        latestTsunamiInfo.areas.forEach((area, index) => {
+            if (area.name) {
+                // === 改良: 文字列を正規化・トリム ===
+                const rawName = area.name;
+                const trimmedName = rawName.trim();
+                const normalizedName = trimmedName.normalize('NFC'); // Unicode正規化
+                apiRegionNames.add(normalizedName);
+                console.log(`  - API[${index}]: '${rawName}' -> trimmed: '${trimmedName}' -> normalized: '${normalizedName}'`);
+            } else {
+                console.warn(`  - API[${index}]: name プロパティがありません。`, area);
+            }
         });
-      });
-    }
-  });
+        console.log("📡 抽出・正規化されたAPI区域名リスト:", Array.from(apiRegionNames));
+        // === 改良 ここまで ===
 
-  // 2. GeoJSONデータを元に、スタイル付きのLeaflet GeoJSONレイヤーを作成
-  try {
-    tsunamiLayer = L.geoJSON(tsunamiAreaGeoJsonData, {
-      style: function (feature) {
-        const regionName = feature.properties.name; // GeoJSONの区域名
-        const status = tsunamiStatusMap.get(regionName); // 警報状況を取得
+        // === 改良版: GeoJSONデータをフィルタリング (文字列を正規化・トリムして比較) ===
+        console.log("🔍 GeoJSONデータをフィルタリング中...");
+        const filteredFeatures = tsunamiAreaGeoJsonData.features.filter((feature, index) => {
+            const rawGeoName = feature.properties?.name;
+            // === 改良: GeoJSON名も同様に処理 ===
+            const trimmedGeoName = rawGeoName ? rawGeoName.trim() : null;
+            const normalizedGeoName = trimmedGeoName ? trimmedGeoName.normalize('NFC') : null;
+            // === 改良 ここまで ===
 
-        if (status) {
-          // 警報/注意報が発表されている区域
-          let fillColor = "gray"; // デフォルト色
-          let opacity = 0.0; // デフォルトは非表示
-          if (status.grade === "Warning") {
-            fillColor = "red";
-            opacity = 0.5;
-          } else if (status.grade === "Watch") {
-            fillColor = "orange";
-            opacity = 0.5;
-          } else {
-            // その他の状態 (例: "Forecast", "None" など)
-            fillColor = "yellow";
-            opacity = 0.3;
-          }
-          return {
-            fillColor: fillColor,
-            color: "black", // 境界線の色
-            weight: 1, // 境界線の太さ
-            opacity: 0.7, // 境界線の透明度
-            fillOpacity: opacity, // 塗りつぶしの透明度
-          };
-        } else {
-          // 警報が出ていない区域は非表示または薄く表示
-          return {
-            fillColor: "gray",
-            color: "black",
-            weight: 0.5,
-            opacity: 0.2,
-            fillOpacity: 0.0, // 完全に透明
-          };
+            // 最初の数件だけ詳細ログ (特殊文字を可視化)
+            if (index < 50) {
+                console.log(`  - GeoJSON[${index}]: '${rawGeoName}' -> trimmed: '${trimmedGeoName}' -> normalized: '${normalizedGeoName}'`);
+                if (rawGeoName !== trimmedGeoName) {
+                    console.log(`    -> 元の名前に空白がありました。`);
+                }
+            }
+
+            if (!normalizedGeoName) {
+                if (index < 5) console.log(`  - GeoJSON[${index}]: name プロパティがありません。スキップします。`);
+                return false;
+            }
+
+            // === 改良: 正規化された名前で比較 ===
+            const isMatch = apiRegionNames.has(normalizedGeoName);
+            // === 改良 ここまで ===
+
+            if (isMatch) {
+                console.log(`  ✅ マッチ成功: GeoJSON[${index}] '${normalizedGeoName}' === API区域名`);
+            } else if (index < 5) {
+                // マッチしなかった場合もログに出す (多いと煩雑になるので、最初の数件のみ)
+                console.log(`  - GeoJSON[${index}]: '${normalizedGeoName}' はAPIリストにありません。`);
+            }
+
+            return isMatch;
+        });
+        console.log(`🔍 フィルタリング完了。マッチしたFeature数: ${filteredFeatures.length}`);
+        // === 改良 ここまで ===
+
+        // 4. フィルタリングされたデータがなければ終了
+        if (filteredFeatures.length === 0) {
+            console.log("⚠️ APIの区域名とGeoJSONの区域名が一致するデータがありませんでした。");
+            // 必要に応じて、ここでも境界線を表示するか処理を追加できます
+            return;
         }
-      },
-      onEachFeature: function (feature, layer) {
-        const regionName = feature.properties.name;
-        const status = tsunamiStatusMap.get(regionName);
-        if (status) {
-          // ポップアップやツールチップを追加 (オプション)
-          let popupContent = `<b>${regionName}</b><br>警報等級: ${status.grade}`;
-          if (status.immediate) {
-            popupContent += "<br><b>直ちに来襲</b>";
-          }
-          layer.bindPopup(popupContent);
-          // layer.bindTooltip(regionName); // ツールチップも可能
-        }
-      },
-    });
 
-    // 3. 地図にレイヤーを追加
-    if (tsunamiLayer) {
-      tsunamiLayer.addTo(map);
-      console.log("津波レイヤーを地図に追加しました。");
+        // 5. === 以降は変更なし（スタイル設定、レイヤー作成、追加） ===
+        // 警報状況データをマップ化 (区域名 -> {grade, immediate, maxHeight, firstHeight})
+        // === 改良: こちらも正規化された名前でマップを作成 ===
+        const tsunamiStatusMap = new Map();
+        latestTsunamiInfo.areas.forEach((area) => {
+            if (area.name) {
+                const normalizedName = area.name.trim().normalize('NFC');
+                tsunamiStatusMap.set(normalizedName, {
+                    grade: area.grade,
+                    immediate: area.immediate,
+                    maxHeight: area.maxHeight,
+                    firstHeight: area.firstHeight
+                });
+            }
+        });
+        // === 改良 ここまで ===
+
+        // フィルタリングされたGeoJSONデータを元に、スタイル付きのLeaflet GeoJSONレイヤーを作成
+        tsunamiLayer = L.geoJSON({ type: "FeatureCollection", features: filteredFeatures }, { // 新しいFeatureCollectionを作成
+            style: function (feature) {
+                // === 改良: こちらも正規化された名前で取得 ===
+                const regionName = feature.properties.name.trim().normalize('NFC');
+                // === 改良 ここまで ===
+                const status = tsunamiStatusMap.get(regionName);
+
+                // ... (スタイル設定ロジックは変更なし) ...
+                if (status) {
+                    let color, weight, opacity, fillColor, fillOpacity;
+                    switch (status.grade) {
+                        case "MajorWarning": // 大津波警報
+                            color = "#800080"; // Purple
+                            fillColor = "#800080";
+                            weight = 8;
+                            opacity = 0.9;
+                            fillOpacity = 0.3;
+                            break;
+                        case "Warning": // 津波警報
+                            color = "#FF0000"; // Red
+                            fillColor = "#FF0000";
+                            weight = 6;
+                            opacity = 0.85;
+                            fillOpacity = 0.25;
+                            break;
+                        case "Watch": // 津波注意報
+                            color = "#ffd740"; // Orange
+                            fillColor = "#ffd740";
+                            weight = 4;
+                            opacity = 0.8;
+                            fillOpacity = 0.2;
+                            break;
+                        default:
+                            color = "#0000FF"; // Default Blue
+                            fillColor = "#0000FF";
+                            weight = 2;
+                            opacity = 0.7;
+                            fillOpacity = 0.1;
+                    }
+                    return {
+                        color: color,
+                        weight: weight,
+                        opacity: opacity,
+                        fillColor: fillColor,
+                        fillOpacity: fillOpacity
+                    };
+                } else {
+                    // 理論上、フィルタリングされているのでここには来ないはず
+                    return {
+                        color: "#888888",
+                        weight: 1,
+                        opacity: 0.4,
+                        fillColor: "#cccccc",
+                        fillOpacity: 0.05
+                    };
+                }
+            },
+            onEachFeature: function (feature, layer) {
+                // === 改良: こちらも正規化された名前で取得 ===
+                const regionName = feature.properties.name.trim().normalize('NFC');
+                // === 改良 ここまで ===
+                const status = tsunamiStatusMap.get(regionName);
+                if (status) {
+                    let popupContent = `<b>${feature.properties.name}</b>`; // 表示は元の名前
+                    popupContent += `<br>警報等級: ${status.grade || '不明'}`;
+                    if (status.immediate) {
+                        popupContent += "<br><b>⚠️ 直ちに来襲</b>";
+                    }
+                    if (status.firstHeight) {
+                        popupContent += `<br>第1波: ${status.firstHeight.condition || '情報なし'}`;
+                        if (status.firstHeight.arrivalTime) {
+                             const timeStr = new Date(status.firstHeight.arrivalTime).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+                             popupContent += ` (${timeStr})`;
+                        }
+                    }
+                    if (status.maxHeight) {
+                        popupContent += `<br>予想最大波高: ${status.maxHeight.description || status.maxHeight.value + 'm' || '情報なし'}`;
+                    }
+                    layer.bindPopup(popupContent);
+                } else {
+                    // 理論上、ここにも来ないはず
+                    layer.bindPopup(`<b>${feature.properties.name}</b><br>警報情報なし`);
+                }
+            },
+        });
+
+        // 地図にレイヤーを追加
+        if (tsunamiLayer) {
+            tsunamiLayer.addTo(map);
+            console.log("✅ フィルタリングされた津波レイヤーを地図に追加しました。");
+
+            
+        }
+    } catch (error) {
+        console.error("❌ 津波GeoJSONレイヤーの作成または追加中にエラーが発生しました:", error);
+        alert(`津波レイヤーの作成中にエラーが発生しました。\nエラー: ${error.message}`);
     }
-  } catch (error) {
-    console.error(
-      "津波GeoJSONレイヤーの作成または追加中にエラーが発生しました:",
-      error
-    );
-  }
 }
 // 自動更新機能
 function startAutoRefresh() {
@@ -5255,9 +5486,9 @@ function getCurrentLocation(onSuccess, onError) {
 }
 
 // magmin と magmax の入力要素と適用ボタンを取得
-const magMinInput = document.getElementById('magMinInput');
-const magMaxInput = document.getElementById('magMaxInput');
-const applyMagRangeButton = document.getElementById('applyMagRangeButton');
+const magMinInput = document.getElementById("magMinInput");
+const magMaxInput = document.getElementById("magMaxInput");
+const applyMagRangeButton = document.getElementById("applyMagRangeButton");
 
 // 入力ボックスに初期値を設定
 if (magMinInput) magMinInput.value = magmin;
@@ -5265,53 +5496,149 @@ if (magMaxInput) magMaxInput.value = magmax;
 
 // 適用ボタンのクリックイベントリスナー
 if (applyMagRangeButton) {
-    applyMagRangeButton.addEventListener('click', function() {
-        applyMagRange(); // 関数を呼び出して処理
-    });
+  applyMagRangeButton.addEventListener("click", function () {
+    applyMagRange(); // 関数を呼び出して処理
+  });
 }
 
 // エンターキーで適用できるようにする場合 (オプション)
 if (magMinInput) {
-    magMinInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') applyMagRange();
-    });
+  magMinInput.addEventListener("keypress", function (e) {
+    if (e.key === "Enter") applyMagRange();
+  });
 }
 if (magMaxInput) {
-    magMaxInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') applyMagRange();
-    });
+  magMaxInput.addEventListener("keypress", function (e) {
+    if (e.key === "Enter") applyMagRange();
+  });
 }
 
 // --- マグニチュード範囲を適用する関数 ---
 function applyMagRange() {
-    // 入力値を取得し、数値に変換
-    const newMin = parseFloat(magMinInput.value);
-    const newMax = parseFloat(magMaxInput.value);
+  // 入力値を取得し、数値に変換
+  const newMin = parseFloat(magMinInput.value);
+  const newMax = parseFloat(magMaxInput.value);
 
-    // 入力値が有効な数値かチェック
-    if (isNaN(newMin) || isNaN(newMax)) {
-        alert("有効な数値を入力してください。");
-        // 入力ボックスの値を元に戻す (オプション)
-        magMinInput.value = magmin;
-        magMaxInput.value = magmax;
-        return;
+  // 入力値が有効な数値かチェック
+  if (isNaN(newMin) || isNaN(newMax)) {
+    alert("有効な数値を入力してください。");
+    // 入力ボックスの値を元に戻す (オプション)
+    magMinInput.value = magmin;
+    magMaxInput.value = magmax;
+    return;
+  }
+
+  // magmin が magmax 以下かチェック (オプションだが推奨)
+  if (newMin > newMax) {
+    alert("最小マグニチュードは最大マグニチュード以下である必要があります。");
+    // 入力ボックスの値を元に戻す (オプション)
+    magMinInput.value = magmin;
+    magMaxInput.value = magmax;
+    return;
+  }
+
+  // グローバル変数を更新
+  magmin = newMin;
+  magmax = newMax;
+
+  console.log(
+    `マグニチュード範囲が更新されました: magmin=${magmin}, magmax=${magmax}`
+  );
+
+  // 表示を更新 (combinedData や allData を再構築・再フィルタリング)
+  updateCombinedDisplay();
+}
+
+// datemin と datemax の入力要素と適用/クリアボタンを取得
+const dateMinInput = document.getElementById("dateMinInput");
+const dateMaxInput = document.getElementById("dateMaxInput");
+const applyDateRangeButton = document.getElementById("applyDateRangeButton");
+const clearDateRangeButton = document.getElementById("clearDateRangeButton"); // クリアボタン
+
+// 日時範囲を適用する関数
+function applyDateRange() {
+  // 入力値を取得し、Date オブジェクトに変換
+  let newMin = null;
+  let newMax = null;
+
+  if (dateMinInput && dateMinInput.value) {
+    // datetime-local は通常 'YYYY-MM-DDTHH:MM' 形式で値を返す
+    const minDateObj = new Date(dateMinInput.value);
+    if (!isNaN(minDateObj.getTime())) {
+      newMin = minDateObj;
+    } else {
+      alert("最小日時の形式が正しくありません。");
+      // 入力ボックスの値を元に戻す (オプション)
+      if (datemin) {
+        dateMinInput.value = datemin.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm 形式に変換
+      } else {
+        dateMinInput.value = ""; // null の場合は空にする
+      }
+      return;
     }
+  }
 
-    // magmin が magmax 以下かチェック (オプションだが推奨)
-    if (newMin > newMax) {
-        alert("最小マグニチュードは最大マグニチュード以下である必要があります。");
-        // 入力ボックスの値を元に戻す (オプション)
-        magMinInput.value = magmin;
-        magMaxInput.value = magmax;
-        return;
+  if (dateMaxInput && dateMaxInput.value) {
+    const maxDateObj = new Date(dateMaxInput.value);
+    if (!isNaN(maxDateObj.getTime())) {
+      newMax = maxDateObj;
+    } else {
+      alert("最大日時の形式が正しくありません。");
+      // 入力ボックスの値を元に戻す (オプション)
+      if (datemax) {
+        dateMaxInput.value = datemax.toISOString().slice(0, 16);
+      } else {
+        dateMaxInput.value = "";
+      }
+      return;
     }
+  }
 
-    // グローバル変数を更新
-    magmin = newMin;
-    magmax = newMax;
+  // datemin が datemax 以下かチェック (オプションだが推奨)
+  if (newMin && newMax && newMin > newMax) {
+    alert("最小日時は最大日時以前である必要があります。");
+    // 入力ボックスの値を元に戻す (オプション)
+    if (datemin) {
+      dateMinInput.value = datemin.toISOString().slice(0, 16);
+    } else {
+      dateMinInput.value = "";
+    }
+    if (datemax) {
+      dateMaxInput.value = datemax.toISOString().slice(0, 16);
+    } else {
+      dateMaxInput.value = "";
+    }
+    return;
+  }
 
-    console.log(`マグニチュード範囲が更新されました: magmin=${magmin}, magmax=${magmax}`);
+  // グローバル変数を更新
+  datemin = newMin;
+  datemax = newMax;
+  console.log(
+    `日時範囲が更新されました: datemin=${
+      datemin?.toISOString() || "null"
+    }, datemax=${datemax?.toISOString() || "null"}`
+  );
 
-    // 表示を更新 (combinedData や allData を再構築・再フィルタリング)
-    updateCombinedDisplay();
+  // 表示を更新
+  updateCombinedDisplay();
+}
+
+// 日時範囲をクリアする関数
+function clearDateRange() {
+  datemin = null;
+  datemax = null;
+  if (dateMinInput) dateMinInput.value = "";
+  if (dateMaxInput) dateMaxInput.value = "";
+  console.log(`日時範囲がクリアされました: datemin=null, datemax=null`);
+  updateCombinedDisplay(); // 表示を更新
+}
+
+// 適用ボタンのクリックイベントリスナー
+if (applyDateRangeButton) {
+  applyDateRangeButton.addEventListener("click", applyDateRange);
+}
+// クリアボタンのクリックイベントリスナー
+if (clearDateRangeButton) {
+  clearDateRangeButton.addEventListener("click", clearDateRange);
 }
