@@ -27,6 +27,7 @@ let combinedData = {
   shakealertData: [],
   ceaEew: null,
   iclEew: null,
+  renamedHypoData: [], // JMAの地震情報を統合するための変数
 };
 
 let markerGroup = null; // マーカーのグループを保持する変数
@@ -349,6 +350,7 @@ let lastUpdateTimes = {
   cwaEq: null,
   cwaEq_tiny: null,
   jmaGeojson: null,
+  renamedHypoData: null, // JMAの地震情報を統合するための変数
 };
 
 // DOM要素取得
@@ -368,10 +370,15 @@ const sourceCWA_tiny = document.getElementById("sourceCWA_tiny");
 const sourceJmaEqList = document.getElementById("sourceJmaEqList");
 const sourceJmaHypo = document.getElementById("sourceJmaHypo");
 const sourceshakealert = document.getElementById("sourceshakealert");
+const sourceRenamedHypo = document.getElementById("sourceRenamedHypo");
 
 const intervalInput = document.getElementById("intervalInput");
 const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
+
+if (sourceRenamedHypo) {
+    sourceRenamedHypo.addEventListener("change", updateCombinedDisplay);
+}
 
 // セレクト変更時に再実行
 document.getElementById("usgssetting").addEventListener("change", () => {
@@ -1540,6 +1547,7 @@ function updateCombinedDisplay() {
   const showCWA = sourceCWA?.checked; // ✅ 新しいチェックボックス
   const showCWA_Tiny = sourceCWA_tiny?.checked; // ✅ 新しいチェックボックス
   const showshakealert = sourceshakealert?.checked; // ✅ 新しいチェックボックス
+  const showRenamedHypo = sourceRenamedHypo?.checked; // ✅ 新しいチェックボックス
 
   // ソート条件の取得
   const sortCriteria = document.getElementById("sortCriteria").value;
@@ -1547,6 +1555,17 @@ function updateCombinedDisplay() {
 
   // すべてのデータを統合
   allData.length = 0;
+
+//RenamedHypo データの統合
+    if (showRenamedHypo && combinedData.renamedHypoData && Array.isArray(combinedData.renamedHypoData)) {
+        // 3. データを allData に追加 (必要に応じてフィルタリングも可能)
+        combinedData.renamedHypoData.forEach((item) => {
+            // 例: マグニチュードでフィルタリング (オプション)
+            // if (magmin <= item.magnitude && item.magnitude <= magmax) {
+                 allData.push(item); // item は既に変換済みの統一形式
+            // }
+        });
+    }
 
   // JMA 緊急地震速報
   if (showJMA && combinedData.jmaEew) {
@@ -1835,6 +1854,17 @@ function updateCombinedDisplay() {
 
     html += `<div class = "no-badge">No. ${index + 1}</div>`;
 
+//renamedHypo データの表示
+    if (item.source === "jma_geojson_old" && index <= 500) {
+      html += `<p class="time">発生時刻: ${item.time}</p>`;
+      html += `<p class="location">震源地: ${item.location}</p>`;
+      html += `<p>マグニチュード: ${item.magnitude}</p>`;
+      html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
+      html += `<p class="source">情報源: Renamed Hypo</p>`;
+    } 
+
+
+//shakealert 情報
     if (item.source === "shakealert") {
       html += `<h3>${item.Title}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
@@ -3268,7 +3298,7 @@ fetchCwaTinyData(); // CWA Tiny 地震情報
 fetchJmaHypoData(HypoDate); // JMA Hypoデータを初期取得
 startAutoFetch(); // 自動取得開始
 connectshakealert(); // SA WebSocket接続開始
-
+fetchRenamedHypoData(); // JMA Hypoデータのリネームを初期取得
 // 初回XMLデータ取得
 initialJmaXmlFetch();
 
@@ -5642,3 +5672,95 @@ if (applyDateRangeButton) {
 if (clearDateRangeButton) {
   clearDateRangeButton.addEventListener("click", clearDateRange);
 }
+
+
+// 新しい関数: renamed_h*.json データを取得し、combinedData に格納
+async function fetchRenamedHypoData(/* 必要に応じて引数、例: filenamePattern */) {
+    // 1. combinedData の対応するプロパティを初期化
+    //    (既存の fetchJmaHypoData のように、配列で初期化するのが一般的)
+    combinedData.renamedHypoData = []; // または jmaHypoData など、適切な名前
+
+    try {
+        // 2. JSON ファイルの URL を構築
+        //    例: const url = `path/to/your/data/renamed_h1919.json`;
+        //    複数ファイルを処理する場合はループや動的なURL生成が必要
+        // *** パスが正しいか確認してください ***
+        const url = 'renamed_h1919.json'; // <- 実際のパスに置き換え
+
+        // 3. fetch API を使用してデータを取得
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTPエラー: ${response.status} (${response.statusText})`);
+        }
+
+        // 4. レスポンスを JSON としてパース
+        const data = await response.json();
+
+        // 5. *** 修正: data.features が存在し、配列であることを確認 ***
+        let processedData = [];
+        if (data && Array.isArray(data)) { // *** 重要: data自体が配列の場合 ***
+            processedData = data.map((feature) => {
+                // *** 修正: ブラケット記法でプロパティにアクセス ***
+                // *** プロパティ名が正しいか確認してください ***
+                const lat = parseFloat(feature["9-10"]); // 数値に変換
+                const lon = parseFloat(feature["12-13"]); // 数値に変換
+                // 深さ、マグニチュードなども必要に応じて変換
+                const depthValue = feature["15"];
+                const depth = (depthValue !== null && depthValue !== undefined) ? parseFloat(depthValue) : null;
+                const magValue = feature["17"];
+                const magnitude = (magValue !== null && magValue !== undefined) ? parseFloat(magValue) : null;
+
+                let distance = Infinity; // デフォルト値
+                if (!isNaN(lat) && !isNaN(lon)) {
+                   distance = epicentralDistance(
+                      lat,
+                      lon,
+                      here.lat,
+                      here.lon
+                   );
+                }
+
+
+                return {
+                    // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
+                    source: "jma_geojson_old", // ✅ ソースを明示
+                    displayType: "eq", // ✅ 表示タイプを明示
+                    // *** 修正: ブラケット記法でプロパティ値を取得 ***
+                    time: feature["2-7"], // 発生時刻 (文字列のままか、Dateオブジェクトに変換)
+                    location: feature["29"] || "不明", // 震源地
+                    magnitude: magnitude, // 数値
+                    magtype: feature["18"] || "", // マグニチュードの種類
+                    depth: depth, // 数値 (km)
+                    lat: lat, // 数値
+                    lng: lon, // 数値
+                    distance: distance !== Infinity ? distance.toFixed(2) : "情報なし", // 震央距離 (km)
+                    intensity: feature["24"] || "なし", // 最大震度 (あれば)
+                    // 必要に応じて他のプロパティも追加
+                    // title: feature["..."] || `M${magnitude} 地震`,
+                    // json: feature["..."],
+                    // ... 他のプロパティ
+                };
+            });
+        } else {
+             console.warn("取得したデータが期待される配列形式ではありません:", data);
+             // data.features がなかったり配列でない場合の処理
+             // processedData は空のまま []
+        }
+
+        // 6. 取得・変換したデータを combinedData に格納
+        combinedData.renamedHypoData = processedData;
+
+        // 7. 表示を更新
+        updateCombinedDisplay();
+        console.log("🔍 renamed_h*.json データを取得・変換し、combinedData に格納しました:", processedData);
+
+    } catch (error) {
+        console.error("❌ renamed_h*.json データの取得または解析中にエラーが発生しました:", error);
+        // エラー時も combinedData をクリアまたはエラー状態に設定し、表示を更新
+        combinedData.renamedHypoData = [];
+        updateCombinedDisplay();
+    }
+}
+
+// 関数を呼び出して実行
+// fetchRenamedHypoData();
