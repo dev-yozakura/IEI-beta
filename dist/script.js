@@ -1547,8 +1547,7 @@ function updateCombinedDisplay() {
   const showCWA = sourceCWA?.checked; // ✅ 新しいチェックボックス
   const showCWA_Tiny = sourceCWA_tiny?.checked; // ✅ 新しいチェックボックス
   const showshakealert = sourceshakealert?.checked; // ✅ 新しいチェックボックス
-  const showRenamedHypo = sourceRenamedHypo?.checked; // ✅ 新しいチェックボックス
-
+  const showRenamedHypo = sourceRenamedHypo?.checked; // RenamedHypo 用フィルタ
   // ソート条件の取得
   const sortCriteria = document.getElementById("sortCriteria").value;
   const sortDirection = document.getElementById("sortDirection").value;
@@ -1561,9 +1560,9 @@ function updateCombinedDisplay() {
         // 3. データを allData に追加 (必要に応じてフィルタリングも可能)
         combinedData.renamedHypoData.forEach((item) => {
             // 例: マグニチュードでフィルタリング (オプション)
-            // if (magmin <= item.magnitude && item.magnitude <= magmax) {
+             if (magmin <= item.magnitude && item.magnitude <= magmax) {
                  allData.push(item); // item は既に変換済みの統一形式
-            // }
+             }
         });
     }
 
@@ -3369,30 +3368,84 @@ console.log("🔄 initMap: 津波データ取得の待機を開始しました�
 function getIconSize(magnitude) {
   // マグニチュードに応じてアイコンサイズを計算
   const baseSize = 7;
-  const scaleFactor = 2;
   const size = baseSize + Math.pow(magnitude, 2);
   return [size, size];
 }
 
 function getDepthColor(depth) {
-  if (depth === undefined || depth === null || isNaN(depth)) return "black"; // デフォルト（黒色）
+  if (depth === undefined || depth === null || isNaN(depth)) return "#000000"; // デフォルト（黒色）
 
-  if (depth < 10) return "red"; // 赤（浅い）
-  else if (depth < 30) return "orange"; // オレンジ
-  else if (depth < 50) return "yellow"; // 黄色
-  else if (depth < 80) return "green"; // 緑
-  else if (depth < 100) return "cyan"; // シアン
-  else if (depth < 200) return "blue"; // 青
-  else return "purple"; // 紫
+  // 深さに基づいてHSL値を計算して滑らかなグラデーションを生成
+  // 赤(0°) → オレンジ(30°) → 黄色(60°) → 緑(120°) → シアン(180°) → 青(240°) → 紫(300°)
+  let hue;
+  if (depth < 10) {
+    // 赤からオレンジ (0° - 30°)
+    hue = 0 + (30 * depth / 10);
+  } else if (depth < 30) {
+    // オレンジから黄色 (30° - 60°)
+    hue = 30 + (30 * (depth - 10) / 20);
+  } else if (depth < 50) {
+    // 黄色から緑 (60° - 120°)
+    hue = 60 + (60 * (depth - 30) / 20);
+  } else if (depth < 80) {
+    // 緑からシアン (120° - 180°)
+    hue = 120 + (60 * (depth - 50) / 30);
+  } else if (depth < 100) {
+    // シアンから青 (180° - 240°)
+    hue = 180 + (60 * (depth - 80) / 20);
+  } else if (depth < 200) {
+    // 青から紫 (240° - 300°)
+    hue = 240 + (60 * (depth - 100) / 100);
+  } else {
+    // 紫以上は固定
+    hue = 300;
+  }
+
+  // HSLをRGBに変換して返す
+  return hslToRgb(hue, 100, 50);
 }
-// マーカー作成関数 (変更なし)
+
+// HSLをRGBに変換する関数
+function hslToRgb(h, s, l) {
+  h /= 360;
+  s /= 100;
+  l /= 100;
+  
+  let r, g, b;
+  
+  if (s === 0) {
+    r = g = b = l; // 無彩色
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+  
+  const toHex = (c) => {
+    const hex = Math.round(c * 255).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  };
+  
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+// マーカー作成関数の変更版
 function createMarker(markerData) {
-  // ... (createMarker 関数の内容は変更ありません) ...
   const magnitude = markerData.magnitude || markerData.Magunitude || 1;
-  const iconSize = getIconSize(magnitude);
   const lat = markerData.lat || markerData.latitude;
   const lng = markerData.lng || markerData.longitude;
   const depth = markerData.depth || markerData.Depth;
+  
   // 緯度経度が無効な場合はマーカーを作成しない
   if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
     console.warn("無効な緯度経度のためマーカーを作成しません:", markerData);
@@ -3400,14 +3453,19 @@ function createMarker(markerData) {
   }
 
   const color = getDepthColor(depth);
-  const customIcon = L.icon({
-    iconUrl: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='50' cy='50' r='50' fill='${color}' stroke='black' stroke-width='2'/%3E%3C/svg%3E`,
-    iconSize: iconSize,
-    iconAnchor: [iconSize[0] / 2, iconSize[1] / 2],
-    popupAnchor: [0, -iconSize[1]],
+  const radius = getIconSize(magnitude)[0] / 2; // CircleMarkerの半径に変換
+
+  // CircleMarkerを使用して直接図形を描画
+  const marker = L.circleMarker([lat, lng], {
+    radius: radius,
+    fillColor: color,
+    color: "#000000", // 枠線の色
+    weight: 0.3, // 枠線の太さ
+    opacity: 1,
+    fillOpacity: 0.8
   });
 
-  const popupContent = // ポップアップ/ツールチップに表示する内容は同じ
+  const popupContent = 
     (markerData.time || markerData.OriginTime || "時間不明") +
     "<br>" +
     (markerData.location ||
@@ -3420,22 +3478,13 @@ function createMarker(markerData) {
     } km</p>` +
     `<p>情報源: ${markerData.source || "不明"}</p>`;
 
-  // マーカーを作成
-  const marker = L.marker([lat, lng], { icon: customIcon });
-
-  // --- 変更箇所 ここから ---
-  // ホバーツールチップをバインド (カーソルを合わせたときに表示)
-  // オプションで、クリック用のポップアップも同時にバインドできます。
+  // ホバーツールチップをバインド
   marker.bindTooltip(popupContent, {
-    permanent: false, // true にすると常に表示、false でホバー時のみ
-    direction: "top", // ツールチップの表示方向 ('top', 'bottom', 'left', 'right', 'center', 'auto')
-    offset: [0, -10], // アイコンからのオフセット [x, y] (ピクセル)
-    opacity: 0.9, // ツールチップの透明度
+    permanent: false,
+    direction: "top",
+    offset: [0, -radius - 10],
+    opacity: 0.9,
   });
-
-  // (オプション) クリックでもポップアップを表示したい場合はこちらも残す
-  // marker.bindPopup(popupContent);
-  // --- 変更箇所 ここまで ---
 
   return marker;
 }
