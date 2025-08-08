@@ -1561,9 +1561,9 @@ function updateCombinedDisplay() {
         // 3. データを allData に追加 (必要に応じてフィルタリングも可能)
         combinedData.renamedHypoData.forEach((item) => {
             // 例: マグニチュードでフィルタリング (オプション)
-            // if (magmin <= item.magnitude && item.magnitude <= magmax) {
+             if (magmin <= item.magnitude && item.magnitude <= magmax) {
                  allData.push(item); // item は既に変換済みの統一形式
-            // }
+             }
         });
     }
 
