@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>津波観測地点マップ</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    #map {
+      height: 100vh;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    /* (オプション) 円の上にラベルを表示するためのCSS */
+    /*
+    .observation-label {
+      font-size: 10px;
+      font-weight: bold;
+      color: black;
+      text-shadow: 1px 1px 1px white, -1px -1px 1px white, 1px -1px 1px white, -1px 1px 1px white;
+      pointer-events: none; /* マーカーのクリックイベントを妨げない */
+
+    */
+  </style>
+</head>
+
+<body>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    (function () { // asyncを外し、即時関数に変更
+
+      // --- 提供されたテキストデータを解析する関数 ---
+      function parseObservationText(text) {
+        const lines = text.trim().split('\n');
+        const sites = [];
+        let isHeaderPassed = false;
+
+        for (const line of lines) {
+          // ヘッダー行をスキップ
+          if (!isHeaderPassed) {
+            if (line.includes('GAUGE LOCATION')) {
+              isHeaderPassed = true;
+            }
+            continue;
+          }
+
+          // 区切り線をスキップ
+          if (line.includes('---')) {
+            continue;
+          }
+
+          // 空行をスキップ
+          if (line.trim() === '') {
+            continue;
+          }
+
+          // 正規表現で行を解析
+          // 例: "    CORONEL CL           37.0S  73.2W    0129   1.03M/ 3.4FT  38"
+          const regex = /^\s*(.*?)\s+([\d.]+)([NS])\s+([\d.]+)([EW])\s+(\d{4})?\s*(.*?)\s*(\d+)?\s*$/;
+          const match = line.match(regex);
+
+          if (match) {
+            const [
+              , // 全体マッチ (不要)
+              locationName,
+              latStr, latDir,
+              lonStr, lonDir,
+              timeStr, // HHMM形式、日付情報なし
+              heightStr,
+              periodStr
+            ] = match;
+
+            // 緯度経度の計算
+            let lat = parseFloat(latStr);
+            if (latDir === 'S') lat = -lat;
+            let lon = parseFloat(lonStr);
+            if (lonDir === 'W') lon = -lon;
+
+            // 高さ文字列からフィート値を抽出 (例: "1.03M/ 3.4FT" -> 3.4)
+            let observedPosAmplitude = "0.0";
+            if (heightStr) {
+              const feetMatch = heightStr.match(/([\d.]+)FT/i);
+              if (feetMatch) {
+                observedPosAmplitude = feetMatch[1];
+              }
+            }
+
+            // 簡易的な日付文字列を作成 (JSONデータと整合性を保つため)
+            let observedMaxTime = "";
+            if (timeStr && timeStr !== "0000") { // 0000は無効とみなす
+              // JSONデータの日付形式に近づける (簡略化のため、イベント日を基準にしていますが、実際は正確な日付が必要です)
+              // ここでは仮にイベント日 (2025-07-29) の翌日 (2025-07-30) と仮定します。
+              // 実際には、観測日時情報が完全であればそれを使用すべきです。
+              const eventDate = "2025-07-30";
+              const hours = timeStr.substring(0, 2);
+              const minutes = timeStr.substring(2, 4);
+              observedMaxTime = `${eventDate}T${hours}:${minutes}:00Z`;
+            }
+
+            sites.push({
+              locationName: locationName.trim(),
+              locationCountry: "N/A", // 国情報はテキストに含まれていないためN/A
+              lat: lat.toString(),
+              lon: lon.toString(),
+              observedMaxTime: observedMaxTime,
+              observedPosAmplitude: observedPosAmplitude,
+              observedPosAmplitudeUnits: "feet", // 抽出した単位
+              predictedPosAmplitude: "0.0", // テキストデータには予測値がない
+              predictedPosAmplitudeUnits: "meters",
+              predictedArrivalTime: "" // テキストデータには予測到達時間がない
+            });
+          } else {
+            console.warn("行の解析に失敗しました:", line);
+          }
+        }
+        return sites;
+      }
+
+      // --- 提供されたテキストデータ ---
+      const observationText = `
+TSUNAMI OBSERVATIONS
+--------------------
+
+  * THE FOLLOWING ARE TSUNAMI WAVE OBSERVATIONS FROM COASTAL
+    AND/OR DEEP-OCEAN SEA LEVEL GAUGES AT THE INDICATED
+    LOCATIONS. THE MAXIMUM TSUNAMI HEIGHT IS MEASURED WITH
+    RESPECT TO THE NORMAL TIDE LEVEL.
+
+                            GAUGE      TIME OF   MAXIMUM     WAVE
+                         COORDINATES   MEASURE   TSUNAMI   PERIOD
+    GAUGE LOCATION        LAT   LON     (UTC)     HEIGHT    (MIN)
+    -------------------------------------------------------------
+    CORONEL CL           37.0S  73.2W    0129   1.03M/ 3.4FT  38
+    LEBU CL              37.6S  73.7W    2224   0.55M/ 1.8FT  16
+    PUERTO LOPEZ EC       1.6S  80.8W    2107   0.46M/ 1.5FT  16
+    LA LIBERTAD EC        2.2S  80.9W    2242   0.60M/ 2.0FT  20
+    PUERTO ATUN MANTA E   0.9S  80.7W    1954   0.34M/ 1.1FT  30
+    CORRAL CL            39.9S  73.4W    2315   0.52M/ 1.7FT  64
+    SANTA BARBARA CA     34.4N 119.7W    1412   0.46M/ 1.5FT  14
+    ANTARCTICA BASE PRA  62.5S  59.7W    0014   0.19M/ 0.6FT  22
+    LAZARO CARDENAS MX   17.9N 102.2W    2348   0.17M/ 0.5FT  18
+    SAN DIEGO CA         32.7N 117.2W    1304   0.22M/ 0.7FT  48
+    CALDERA CL           27.1S  70.8W    2355   0.73M/ 2.4FT  20
+    QUINTERO CL          32.8S  71.5W    2333   1.09M/ 3.6FT  18
+    RIKITEA PF           23.1S 135.0W    1406   0.26M/ 0.9FT  46
+    HUATULCO MX          15.8N  96.1W    2104   0.51M/ 1.7FT  10
+    HUATALCO MX          15.8N  96.1W    2300   0.31M/ 1.0FT  12
+    COLIUMO CL           36.5S  73.0W    2247   1.12M/ 3.7FT  28
+    DAVAO PH              7.2N 125.7E    2254   0.21M/ 0.7FT  34
+    BAHIA MANSA CL       40.6S  73.7W    2308   0.86M/ 2.8FT  18
+    SALINA CRUZ MX       16.2N  95.2W    2327   0.51M/ 1.7FT  20
+    HIENGHENE NEW CALED  20.7S 164.9E    1151   0.44M/ 1.4FT  32
+    COQUIMBO CL          29.9S  71.3W    2244   0.85M/ 2.8FT  28
+    JACKSON BAY NZ       44.0S 168.6E    2154   0.18M/ 0.6FT  16
+    LAZARO CARDENAS MX   17.9N 102.2W    2217   0.14M/ 0.5FT  20
+    ZIHUATANEJO MX       17.6N 101.6W    2216   0.58M/ 1.9FT  20
+    APIA UPOLU WS        13.8S 171.8W    0943   0.81M/ 2.7FT  14
+    PAGO PAGO AS         14.3S 170.7W    1006   0.95M/ 3.1FT  14
+    VALPARAISO CL        33.0S  71.6W    2201   0.54M/ 1.8FT  50
+    ALAMEDA CA           37.8N 122.3W    0936   0.33M/ 1.1FT  32
+    ANTOFAGASTA CL       23.7S  70.4W    2137   0.39M/ 1.3FT  04
+    DART 21419           44.4N 155.7E    0151   0.09M/ 0.3FT  42
+    IQUIQUE CL           20.2S  70.1W    2117   0.37M/ 1.2FT  26
+    FT POINT SAN FRAN    37.8N 122.5W    0913   0.41M/ 1.3FT  34
+    PORT SAN LUIS CA     35.2N 120.8W    0932   0.85M/ 2.8FT  22
+    MONTEREY HARBOR CA   36.6N 121.9W    1144   0.43M/ 1.4FT  32
+    ADAK AK              51.9N 176.6W    0600   0.63M/ 2.1FT  42
+    TOCOPILLA CL         22.1S  70.2W    2057   0.23M/ 0.8FT  10
+    CHANARAL CL          26.4S  70.6W    2031   0.56M/ 1.8FT  32
+    SOSUNOVO RU          46.5N 138.3E    1756   0.07M/ 0.2FT  48
+    HUASCO CL            28.5S  71.2W    2024   0.36M/ 1.2FT  18
+    PORT KEMBLA AU       34.5S 150.9E    1523   0.09M/ 0.3FT  62
+    GOLD COAST SAND BYP  27.9S 153.4E    1617   0.21M/ 0.7FT  84
+    SPRING BAY AU        42.5S 147.9E    1806   0.19M/ 0.6FT  74
+    CALLAO LA-PUNTA PE   12.1S  77.2W    2012   0.70M/ 2.3FT  44
+    PAPOSO CL            25.0S  70.5W    2027   0.37M/ 1.2FT  10
+    TOCOPILLA CL         23.7S  70.4W    1924   0.18M/ 0.6FT  20
+    JUAN FERNANDEZ CL    33.6S  78.8W    1937   0.08M/ 0.3FT  16
+    TUBUAI PF            23.3S 149.5W    1211   0.17M/ 0.6FT  20
+    SOVETSKAJA GAVAN RU  49.0N 140.3E    1654   0.15M/ 0.5FT  58
+    EASTER CL            27.2S 109.4W    1829   0.51M/ 1.7FT  04
+    OUINNE NEW CALEDONI  22.0S 166.7E    1510   0.27M/ 0.9FT  14
+    VANUATU              17.8S 168.3E    1101   0.45M/ 1.5FT  22
+    OUVEA NEW CALEDONIA  20.5S 166.6E    1321   0.18M/ 0.6FT  24
+    LUGANVILLE VU        15.5S 167.2E    1309   0.42M/ 1.4FT  28
+    PORT TAURANGA NZ     37.6S 176.2E    1622   0.16M/ 0.5FT  46
+    OWENGA CHATHAM NZ    44.0S 176.4W    1724   0.34M/ 1.1FT  26
+    FARE UTE TAHITI      17.5S 149.6W    1210   0.23M/ 0.7FT  18
+    PAPEETE TAHITI       17.5S 149.6W    1210   0.24M/ 0.8FT  22
+    TOSASHIMIZU SHIKOKU  32.8N 133.0E    1608   0.49M/ 1.6FT  22
+    OFUNATO HONSHU JP    39.0N 141.8E    0507   0.27M/ 0.9FT  10
+    DART 01003           23.4S 173.4W    1217   0.02M/ 0.1FT  16
+    MANZANILLO MX        19.1N 104.3W    1303   0.53M/ 1.7FT  42
+    SAND POINT AK        55.3N 160.5W    1432   0.24M/ 0.8FT  26
+    TOFINO CA            49.2N 125.9W    1142   0.22M/ 0.7FT  22
+    SOUTH BEACH OR       44.6N 124.0W    1131   0.21M/ 0.7FT  16
+    CRESCENT CITY CA     41.7N 124.2W    1305   1.13M/ 3.7FT  22
+    WINTER HARBOUR CA    50.5N 128.0W    0709   0.27M/ 0.9FT  42
+    BALTRA GALAPAGS EC    0.4S  90.3W    1621   1.04M/ 3.4FT  18
+    SANTACRUZ GALAPAGOS   0.7S  90.3W    1542   0.40M/ 1.3FT  40
+    RAROTONGA CK         21.2S 159.8W    1354   0.17M/ 0.6FT  04
+    HUAHINE PF           16.7S 151.0W    1108   0.15M/ 0.5FT  10
+    SUVA VITI LEVU FJ    18.1S 178.4E    1117   0.07M/ 0.2FT  22
+    NUKUALOFA TO         21.1S 175.2W    1122   0.17M/ 0.5FT  52
+    HIVA OA MARQUESAS     9.8S 139.0W    1239   0.52M/ 1.7FT  22
+    PUERTO VALLARTA MX   20.7N 105.2W    1258   0.16M/ 0.5FT  08
+    LITZLITZ VU          16.1S 167.4E    1003   0.34M/ 1.1FT  52
+    HONIARA SB            9.4S 160.0E    1000   0.10M/ 0.3FT  46
+    ALOFI NU             19.1S 169.9W    1022   0.12M/ 0.4FT  20
+    ARENA COVE CA        38.9N 123.7W    0923   0.79M/ 2.6FT  06
+    OFF OREGON COAST     45.8N 129.7W    0606   0.06M/ 0.2FT  52
+    OFU AS               14.2S 169.7W    0941   0.19M/ 0.6FT  20
+    CHARLESTON OR        43.3N 124.3W    0854   0.21M/ 0.7FT  20
+    LA PUSH WA           47.9N 124.6W    0741   0.23M/ 0.8FT  34
+    AUNUU AS             14.3S 170.6W    0944   0.28M/ 0.9FT  12
+    AUASI AS             14.3S 170.6W    0944   0.29M/ 0.9FT  10
+    TAREKUKURE WHARF SB   6.7S 156.4E    0838   0.41M/ 1.4FT  32
+    LOMBRUM MANUS IS PG   2.0S 147.4E    0753   0.25M/ 0.8FT  60
+    HANASAKI HOKKAIDO J  43.3N 145.6E    0544   0.79M/ 2.6FT  40
+    DART 51425            9.5S 176.2W    0815   0.04M/ 0.1FT  18
+    HONOKOHAU HI USA     19.7N 156.0W    0741   0.11M/ 0.4FT  10
+    KAWAIHAE HAWAII      20.0N 155.8W    0719   0.37M/ 1.2FT  14
+    DEKEHTIK POHNPEI FM   7.0N 158.2E    0634   0.10M/ 0.3FT  20
+    DART 52402           11.9N 153.9E    0507   0.06M/ 0.2FT  44
+    KAUNAKAKAI US        21.1N 157.0W    0620   0.23M/ 0.8FT  30
+    PAGO BAY GUAM US     13.4N 144.8E    0707   0.15M/ 0.5FT  10
+    HONOLULU OAHU        21.3N 157.9W    0658   0.33M/ 1.1FT  16
+    KAHULUI MAUI         20.9N 156.5W    0609   1.74M/ 5.7FT  34
+    DUTCH HBR UNALASKA   53.9N 166.5W    0406   0.32M/ 1.0FT  72
+    ATKA AK              52.2N 174.2W    0430   0.55M/ 1.8FT  38
+    NIKOLSKI AK          52.9N 168.9W    0548   0.41M/ 1.3FT  42
+    BARBERS PT HI        21.3N 158.1W    0638   0.19M/ 0.6FT  04
+    HEEIA HI USA         21.4N 157.8W    0558   0.12M/ 0.4FT  20
+    WAKKANI JP           45.4N 141.7E    0610   0.23M/ 0.8FT  56
+    PORT ALLEN HI USA    21.9N 159.6W    0630   0.42M/ 1.4FT  10
+    CHICHIJIMA JP        27.1N 142.2E    0627   0.49M/ 1.6FT  18
+    WAIANAE HI USA       21.5N 158.2W    0622   0.37M/ 1.2FT  10
+    HILO HAWAII          19.7N 155.1W    0623   1.50M/ 4.9FT  14
+    HANALEI HI           22.2N 159.5W    0548   1.17M/ 3.9FT  12
+    KEEHI HI USA         21.3N 157.9W    0612   0.19M/ 0.6FT  34
+    MAKAPU'U HI          21.3N 157.7W    0604   0.70M/ 2.3FT  14
+    HALEIWA HI           21.6N 158.1W    0548   1.21M/ 4.0FT  12
+    NAWILIWILI KAUAI     22.0N 159.4W    0536   0.23M/ 0.8FT  14
+    NAWILIWILI HI        22.0N 159.4W    0537   0.23M/ 0.7FT  12
+    HANALEI HI USA       22.2N 159.5W    0533   0.90M/ 3.0FT  20
+    WAKE US              19.3N 166.6E    0350   0.22M/ 0.7FT  14
+    MERA JP              34.9N 139.8E    0510   0.32M/ 1.1FT  24
+    APRA HARBOR GUAM US  13.4N 144.7E    0442   0.12M/ 0.4FT  56
+    SAIPAN US            15.2N 145.7E    0456   0.23M/ 0.7FT  60
+    MIDWAY               28.2N 177.4W    0400   0.96M/ 3.1FT  08
+    DART 46413           48.0N 174.2W    0144   0.19M/ 0.6FT  40
+    KUSHIRO JP           43.0N 144.4E    0121   0.33M/ 1.1FT  76
+    DART 21415           50.2N 171.9E    0117   0.20M/ 0.6FT  08
+    DART 21414           49.0N 178.2E    0103   0.28M/ 0.9FT  32
+    DART 21416           48.1N 163.5E    0003   0.90M/ 3.0FT  24
+`; // テキストデータ終了
+
+      // --- 観測された波の高さに応じた色を返す関数 ---
+      function getColorByAmplitude(amplitudeFeet) {
+        const amp = parseFloat(amplitudeFeet);
+        if (isNaN(amp) || amp <= 0.984) {
+          return '#00FFFF'; // 水色
+        } else if (amp <= 3.28) {
+          return '#FFFF00'; // 黄色
+        } else if (amp <= 9.84) {
+          return '#FF0000'; // 赤
+        } else {
+          return '#800080'; // 紫
+        }
+      }
+
+      // --- JSONデータ (ここにPAAQ.jsonの内容を貼り付けてください) ---
+      // 例: const jsonData = { ... };
+      // 今回は、テキストデータのみを使用するため、空のオブジェクトで初期化
+      const jsonData = {
+        "eventLat": 52.2,
+        "eventLon": 160,
+        "quakeLocation": "315 miles SW of Bering I., Komandorski",
+        "eventMagnitude": 8.8,
+        "eventMagnitudeType": "Mwp",
+        "eventDepth": 74,
+        "eventDepthType": "kilometers",
+        "originTime": "2025-07-29T23:24:56 UTC",
+        "sites": [] // sites配列を空で初期化
+      };
+
+      try {
+        // 1. テキストデータを解析
+        const parsedSites = parseObservationText(observationText);
+        console.log("解析されたテキストデータサイト数:", parsedSites.length);
+
+        // 2. JSONデータのsitesと統合 (ここではJSONデータが空なので、テキストデータのみ)
+        //    実際にJSONファイルがある場合は、jsonData.sites を使用してください。
+        const allSites = jsonData.sites.concat(parsedSites);
+        console.log("合計サイト数:", allSites.length);
+
+        // 3. 地図を初期化 (地震の位置を中央に設定)
+        const map = L.map('map').setView([jsonData.eventLat, jsonData.eventLon], 2); // ズームレベルを調整
+
+        // 4. OpenStreetMap タイルレイヤーを追加
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // 5. 地震の位置にマーカーを追加
+        const quakeMarker = L.marker([jsonData.eventLat, jsonData.eventLon]).addTo(map);
+        quakeMarker.bindPopup(
+          `<b>地震発生地点</b><br>
+        Location: ${jsonData.quakeLocation}<br>
+        Magnitude: ${jsonData.eventMagnitude} ${jsonData.eventMagnitudeType}<br>
+        Depth: ${jsonData.eventDepth} ${jsonData.eventDepthType}<br>
+        Time: ${new Date(jsonData.originTime).toLocaleString('ja-JP')} (UTC)`
+        ).openPopup();
+
+        // --- 観測地点データを円形で描画 (色分けあり) ---
+        const observationLayer = L.layerGroup().addTo(map);
+
+        if (allSites && allSites.length > 0) {
+          allSites.forEach(site => {
+            const lat = parseFloat(site.lat);
+            const lon = parseFloat(site.lon);
+
+            if (!isNaN(lat) && !isNaN(lon)) {
+              const observedAmplitude = site.observedPosAmplitude;
+              const color = getColorByAmplitude(observedAmplitude);
+
+              // 円の半径を設定 (メートル単位)
+              const baseRadiusMeters = 70000;
+              const ampValue = parseFloat(observedAmplitude);
+              const scaleFactor = isNaN(ampValue) || ampValue < 0 ? 0 : ampValue;
+              const radius = baseRadiusMeters;
+
+              //西経だけ右に移す
+              const adjustedLon = lon < 0 ? lon + 360 : lon;
+              const circle = L.circle([lat, adjustedLon], {
+                radius: radius,
+                color: color,
+                fillColor: color,
+                fillOpacity: 1,
+                weight: 1
+              }).addTo(observationLayer);
+
+              // ポップアップに情報を表示
+              let popupContent = `<b>${site.locationName}</b><br>`;
+              popupContent += `Country: ${site.locationCountry || 'N/A'}<br>`;
+              popupContent += `Latitude: ${lat.toFixed(4)}<br>`;
+              popupContent += `Longitude: ${lon.toFixed(4)}<br>`;
+
+              if (site.observedMaxTime && site.observedMaxTime !== "1970-01-01T00:00:00Z" && site.observedMaxTime !== "") {
+                const observedDate = new Date(site.observedMaxTime);
+                if (observedDate instanceof Date && !isNaN(observedDate)) {
+                  popupContent += `Observed Max Time: ${observedDate.toLocaleString('ja-JP')} (UTC)<br>`;
+                } else {
+                  popupContent += `Observed Max Time: ${site.observedMaxTime}<br>`;
+                }
+              } else {
+                popupContent += `Observed Max Time: N/A<br>`;
+              }
+
+              if (observedAmplitude && observedAmplitude !== "0.0") {
+                popupContent += `Observed Max Amplitude: ${observedAmplitude} ${site.observedPosAmplitudeUnits || 'feet'}<br>`;
+              } else {
+                popupContent += `Observed Max Amplitude: N/A<br>`;
+              }
+
+              if (site.predictedPosAmplitude && site.predictedPosAmplitude !== "0.0") {
+                popupContent += `Predicted Amplitude: ${site.predictedPosAmplitude} ${site.predictedPosAmplitudeUnits || 'meters'}<br>`;
+              } else {
+                popupContent += `Predicted Amplitude: N/A<br>`;
+              }
+
+              if (site.predictedArrivalTime && site.predictedArrivalTime !== "1970-01-01T00:00:00Z" && site.predictedArrivalTime !== "") {
+                const predictedDate = new Date(site.predictedArrivalTime);
+                if (predictedDate instanceof Date && !isNaN(predictedDate)) {
+                  popupContent += `Predicted Arrival: ${predictedDate.toLocaleString('ja-JP')} (UTC)<br>`;
+                } else {
+                  popupContent += `Predicted Arrival: ${site.predictedArrivalTime}<br>`;
+                }
+              } else {
+                popupContent += `Predicted Arrival: N/A<br>`;
+              }
+
+              circle.bindPopup(popupContent);
+
+              // --- (オプション) 円の上にラベルを表示 ---
+              /*
+              const label = L.marker([lat, lon], {
+                  icon: L.divIcon({
+                      className: 'observation-label',
+                      html: site.locationName,
+                      iconSize: null,
+                      iconAnchor: [0, 0]
+                  })
+              }).addTo(observationLayer);
+              */
+              // --- ラベル表示 ここまで ---
+            }
+          });
+        } else {
+          console.warn("観測地点データ (sites) が見つかりません。");
+        }
+
+      } catch (error) {
+        console.error("データの処理中にエラーが発生しました:", error);
+        document.getElementById('map').innerHTML = "<p>データの処理中にエラーが発生しました。コンソールを確認してください。</p>";
+      }
+    })();
+
+  </script>
+
+</body>
+
+</html>

@@ -2,8 +2,9 @@ let HypoDate = 0;
 let IsEng = 2; // 1:中国語, 2:英語
 let allData = [];
 let magmin = 0; // マグニチュードの最小値
-let magmax = 10; // マグニチュードの最大値let datemin = null; // 日時の最小値 (Date オブジェクトまたは null)
-let datemax = null; // 日時の最大値 (Date オブジェクトまたは null)
+let magmax = 10; // マグニチュードの最大値
+let datemin = null; // 日時の最小値 (Date オブジェクトまたは null)
+let datemax = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 日時の最大値 (現在から1か月先をデフォルトに設定)
 
 // ファイルの先頭付近にグローバル変数を宣言
 let latestTsunamiInfo = null; // 既存
@@ -63,8 +64,8 @@ const NOTIFICATION_LEVELS = {
 };
 
 // --- 通知関連のグローバル変数 (既存の変数を置き換えまたは追加) ---
-let enableNotification = true; // 既存
-let soundNotification = true; // 既存
+let enableNotification = false; // 既存
+let soundNotification = false; // 既存
 let magThreshold = 3.0; // 既存
 let lastNotificationId = null; // 既存、通知重複防止用
 let processedIds = new Set(); // 既存、通知済みID記録用
@@ -377,7 +378,9 @@ const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
 
 if (sourceRenamedHypo) {
-    sourceRenamedHypo.addEventListener("change", updateCombinedDisplay);
+  sourceRenamedHypo.addEventListener("change", () =>
+    fetchRenamedHypoData().then(() => updateCombinedDisplay())
+  );
 }
 
 // セレクト変更時に再実行
@@ -819,7 +822,12 @@ async function fetchUsgsData() {
           props.intensity = null; // どちらも情報なしの場合は"情報なし"を使用
         }
         // 統一構造に変換
-        if (magmin <= magnitude && magnitude <= magmax) {
+        if (
+          magmin <= magnitude &&
+          magnitude <= magmax &&
+          datemin <= time &&
+          time <= datemax
+        ) {
           combinedData.usgsData.push({
             type: "usgs",
             Title: props.title,
@@ -906,7 +914,12 @@ async function fetchCwaData() {
             highestIntensity = match[0];
             const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
 
-            if (magmin <= magnitude && magnitude <= magmax) {
+            if (
+              magmin <= magnitude &&
+              magnitude <= magmax &&
+              datemin <= time &&
+              time <= datemax
+            ) {
               combinedData.cwaEqList.push({
                 type: "cwa",
                 Title: ReportType,
@@ -995,7 +1008,12 @@ async function fetchCwaTinyData() {
           if (match) {
             highestIntensity = match[0];
             const intensity = highestIntensity.match(/\d+/)?.[0] || "情報なし";
-            if (magmin <= magnitude && magnitude <= magmax) {
+            if (
+              magmin <= magnitude &&
+              magnitude <= magmax &&
+              datemin <= time &&
+              time <= datemax
+            ) {
               combinedData.cwaEqList_tiny.push({
                 type: "cwa_tiny",
                 Title: ReportType,
@@ -1441,7 +1459,10 @@ async function fetchBmkgData() {
         );
         const location = locationMatch?.[1]?.trim() || "情報なし";
         // 地震情報を統一構造に変換
-        if (magmin <= item.Magnitude && item.Magnitude <= magmax) {
+        if (
+          magmin <= item.Magnitude &&
+          item.Magnitude <= magmax
+        ) {
           combinedData.bmkgData.push({
             type: "bmkg",
             Title: "地震情報",
@@ -1500,7 +1521,10 @@ async function fetchBmkg_M5Data() {
         const intensity = intensityMatch?.[0]?.trim() || "情報なし";
 
         // 地震情報を統一構造に変換
-        if (magmin <= item.Magnitude && item.Magnitude <= magmax) {
+        if (
+          magmin <= item.Magnitude &&
+          item.Magnitude <= magmax
+        ) {
           combinedData.bmkg_M5Data.push({
             type: "bmkg_m5",
             Title: "M5.0+ 地震情報",
@@ -1555,16 +1579,23 @@ function updateCombinedDisplay() {
   // すべてのデータを統合
   allData.length = 0;
 
-//RenamedHypo データの統合
-    if (showRenamedHypo && combinedData.renamedHypoData && Array.isArray(combinedData.renamedHypoData)) {
-        // 3. データを allData に追加 (必要に応じてフィルタリングも可能)
-        combinedData.renamedHypoData.forEach((item) => {
-            // 例: マグニチュードでフィルタリング (オプション)
-             if (magmin <= item.magnitude && item.magnitude <= magmax) {
-                 allData.push(item); // item は既に変換済みの統一形式
-             }
-        });
-    }
+  //RenamedHypo データの統合
+  if (
+    showRenamedHypo &&
+    combinedData.renamedHypoData &&
+    Array.isArray(combinedData.renamedHypoData)
+  ) {
+    // 3. データを allData に追加 (必要に応じてフィルタリングも可能)
+    combinedData.renamedHypoData.forEach((item) => {
+      // 例: マグニチュードでフィルタリング (オプション)
+      if (
+        magmin <= item.magnitude &&
+        item.magnitude <= magmax
+      ) {
+        allData.push(item); // item は既に変換済みの統一形式
+      }
+    });
+  }
 
   // JMA 緊急地震速報
   if (showJMA && combinedData.jmaEew) {
@@ -1660,7 +1691,7 @@ function updateCombinedDisplay() {
         item &&
         item.Title &&
         magmin <= item.magnitude &&
-        item.magnitude <= magmax
+        item.magnitude <= magmax 
       ) {
         allData.push({
           ...item,
@@ -1675,7 +1706,10 @@ function updateCombinedDisplay() {
   // 中国地震台網 地震情報
   if (showCENC && combinedData.cencEqList) {
     Object.values(combinedData.cencEqList).forEach((item) => {
-      if (magmin <= item.magnitude && item.magnitude <= magmax) {
+      if (
+        magmin <= item.magnitude &&
+        item.magnitude <= magmax 
+      ) {
         allData.push(item);
       }
     });
@@ -1721,7 +1755,10 @@ function updateCombinedDisplay() {
       // 必要に応じてフィルタリングや変換をここで行う
       // 例: 特定のマグニチュード以上のみ表示 etc.
       // if (item.magnitude >= 3.0) { // 例: M3.0以上のみ
-      if (magmin <= item.magnitude && item.magnitude <= magmax) {
+      if (
+        magmin <= item.magnitude &&
+        item.magnitude <= magmax
+      ) {
         allData.push(item);
       }
     });
@@ -1795,16 +1832,16 @@ function updateCombinedDisplay() {
     );
     // 修正後: allData 配列を直接渡す
     initMapWithMarkers(map, allData);
-     // === 改良: 津波情報が更新されたときのみレイヤーを更新 ===
+
+    // === 改良: 津波情報が更新されたときのみレイヤーを更新 ===
     // (これは簡略化した例です。実際には、latestTsunamiInfo の前回値を保持・比較するロジックが必要です)
     // または、津波情報取得関数 (fetchTsunamiData) 内でのみ updateTsunamiLayerOnMap を呼び出す
     // ここでは、津波情報が存在する場合のみ更新するように限定
-  fetchTsunamiData()
-    .then(() => {
+    fetchTsunamiData().then(() => {
       if (latestTsunamiInfo) {
-             updateTsunamiLayerOnMap();
-           }
-    })
+        updateTsunamiLayerOnMap();
+      }
+    });
     // === 改良 ここまで ===else if (map) {
     // tab2 非アクティブ時もマーカーデータを更新したい場合 (オプション)
     // initMapWithMarkers(map, allData);
@@ -1853,17 +1890,17 @@ function updateCombinedDisplay() {
 
     html += `<div class = "no-badge">No. ${index + 1}</div>`;
 
-//renamedHypo データの表示
+    //renamedHypo データの表示
     if (item.source === "jma_geojson_old" && index <= 500) {
+      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
-      html += `<p class="location">震源地: ${item.location}</p>`;
-      html += `<p>マグニチュード: ${item.magnitude}</p>`;
+      //html += `<p class="location">震源地: ${item.location}</p>`;
+      //html += `<p>マグニチュード: ${item.magnitude}</p>`;
       html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
-      html += `<p class="source">情報源: Renamed Hypo</p>`;
-    } 
+      html += `<p class="source">情報源: ${item.source}</p>`;
+    }
 
-
-//shakealert 情報
+    //shakealert 情報
     if (item.source === "shakealert") {
       html += `<h3>${item.Title}</h3>`;
       html += `<p class="time">発生時刻: ${item.time}</p>`;
@@ -3056,7 +3093,9 @@ function startAutoFetch() {
     //jmaHypoData
     fetchJmaHypoData(HypoDate); // JMA Hypoデータを定期取得
     // USGSデータ
+
     fetchUsgsData(); // ✅ USGSデータを定期取得
+
     // CWA 地震情報
     fetchCwaData(); // ✅ CWAデータを定期取得
     // CWA Tiny 地震情報
@@ -3297,7 +3336,7 @@ fetchCwaTinyData(); // CWA Tiny 地震情報
 fetchJmaHypoData(HypoDate); // JMA Hypoデータを初期取得
 startAutoFetch(); // 自動取得開始
 connectshakealert(); // SA WebSocket接続開始
-fetchRenamedHypoData(); // JMA Hypoデータのリネームを初期取得
+//fetchRenamedHypoData(); // JMA Hypoデータのリネームを初期取得
 // 初回XMLデータ取得
 initialJmaXmlFetch();
 
@@ -3311,7 +3350,11 @@ function initMap() {
   }
 
   console.log("地図を初期化中...");
-  map = L.map("map").setView([35.6895, 135], 5); // 初期座標（東京）
+  map = L.map("map", {
+    zoomDelta: 0.25, // ズームステップを0.25単位にする
+    zoomSnap: 0.25, // ズームレベルを0.25刻みでスナップ
+    wheelPxPerZoomLevel: 100, // マウスホイールの感度調整（値を大きくするとズームしにくくなる）
+  }).setView([35.6895, 135], 5);
 
   // タイルレイヤーを追加
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -3320,22 +3363,27 @@ function initMap() {
   console.log("タイルレイヤーを追加しました");
 
   // === 追加: 津波GeoJSONデータの取得 (地図初期化時) ===
- // initMap 関数内...
-console.log("🌊 津波区域GeoJSONデータの読み込みを開始します...");
-fetchTsunamiAreaGeoJson().then(() => {
-    console.log("✅ 津波区域GeoJSONデータの読み込みが完了しました。");
-    // GeoJSON の読み込みが完了した**後に**、津波情報を取得
-    fetchTsunamiData();
-    console.log("🌊 GeoJSON読み込み後、津波情報を取得開始しました。");
-}).catch(error => {
-    // fetchTsunamiAreaGeoJson 内でエラー処理済みだが、念のため
-    console.error("❌ initMap内で津波区域データ読み込み開始時にエラー:", error);
-    // GeoJSON読み込みに失敗しても、地図自体の初期化は継続
-    // 必要に応じてエラーメッセージを表示
-    // ただし、この状態では津波レイヤーは表示できません
-});
-console.log("🔄 initMap: 津波データ取得の待機を開始しました。");
-// ... 他の地図初期化処理 ...
+  // initMap 関数内...
+  console.log("🌊 津波区域GeoJSONデータの読み込みを開始します...");
+  fetchTsunamiAreaGeoJson()
+    .then(() => {
+      console.log("✅ 津波区域GeoJSONデータの読み込みが完了しました。");
+      // GeoJSON の読み込みが完了した**後に**、津波情報を取得
+      fetchTsunamiData();
+      console.log("🌊 GeoJSON読み込み後、津波情報を取得開始しました。");
+    })
+    .catch((error) => {
+      // fetchTsunamiAreaGeoJson 内でエラー処理済みだが、念のため
+      console.error(
+        "❌ initMap内で津波区域データ読み込み開始時にエラー:",
+        error
+      );
+      // GeoJSON読み込みに失敗しても、地図自体の初期化は継続
+      // 必要に応じてエラーメッセージを表示
+      // ただし、この状態では津波レイヤーは表示できません
+    });
+  console.log("🔄 initMap: 津波データ取得の待機を開始しました。");
+  // ... 他の地図初期化処理 ...
   // === 追加 ここまで ===
   // 2. プレート境界をGeoJSONで追加
   fetch(
@@ -3380,22 +3428,22 @@ function getDepthColor(depth) {
   let hue;
   if (depth < 10) {
     // 赤からオレンジ (0° - 30°)
-    hue = 0 + (30 * depth / 10);
+    hue = 0 + (30 * depth) / 10;
   } else if (depth < 30) {
     // オレンジから黄色 (30° - 60°)
-    hue = 30 + (30 * (depth - 10) / 20);
+    hue = 30 + (30 * (depth - 10)) / 20;
   } else if (depth < 50) {
     // 黄色から緑 (60° - 120°)
-    hue = 60 + (60 * (depth - 30) / 20);
+    hue = 60 + (60 * (depth - 30)) / 20;
   } else if (depth < 80) {
     // 緑からシアン (120° - 180°)
-    hue = 120 + (60 * (depth - 50) / 30);
+    hue = 120 + (60 * (depth - 50)) / 30;
   } else if (depth < 100) {
     // シアンから青 (180° - 240°)
-    hue = 180 + (60 * (depth - 80) / 20);
+    hue = 180 + (60 * (depth - 80)) / 20;
   } else if (depth < 200) {
     // 青から紫 (240° - 300°)
-    hue = 240 + (60 * (depth - 100) / 100);
+    hue = 240 + (60 * (depth - 100)) / 100;
   } else {
     // 紫以上は固定
     hue = 300;
@@ -3410,33 +3458,33 @@ function hslToRgb(h, s, l) {
   h /= 360;
   s /= 100;
   l /= 100;
-  
+
   let r, g, b;
-  
+
   if (s === 0) {
     r = g = b = l; // 無彩色
   } else {
     const hue2rgb = (p, q, t) => {
       if (t < 0) t += 1;
       if (t > 1) t -= 1;
-      if (t < 1/6) return p + (q - p) * 6 * t;
-      if (t < 1/2) return q;
-      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
       return p;
     };
-    
+
     const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
     const p = 2 * l - q;
-    r = hue2rgb(p, q, h + 1/3);
+    r = hue2rgb(p, q, h + 1 / 3);
     g = hue2rgb(p, q, h);
-    b = hue2rgb(p, q, h - 1/3);
+    b = hue2rgb(p, q, h - 1 / 3);
   }
-  
+
   const toHex = (c) => {
     const hex = Math.round(c * 255).toString(16);
-    return hex.length === 1 ? '0' + hex : hex;
+    return hex.length === 1 ? "0" + hex : hex;
   };
-  
+
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 // マーカー作成関数の変更版
@@ -3445,7 +3493,7 @@ function createMarker(markerData) {
   const lat = markerData.lat || markerData.latitude;
   const lng = markerData.lng || markerData.longitude;
   const depth = markerData.depth || markerData.Depth;
-  
+
   // 緯度経度が無効な場合はマーカーを作成しない
   if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
     console.warn("無効な緯度経度のためマーカーを作成しません:", markerData);
@@ -3462,10 +3510,10 @@ function createMarker(markerData) {
     color: "#000000", // 枠線の色
     weight: 0.3, // 枠線の太さ
     opacity: 1,
-    fillOpacity: 0.8
+    fillOpacity: 0.8,
   });
 
-  const popupContent = 
+  const popupContent =
     (markerData.time || markerData.OriginTime || "時間不明") +
     "<br>" +
     (markerData.location ||
@@ -3543,7 +3591,10 @@ window.addEventListener("load", function () {
         // map オブジェクトが定義済みの場合
         map.setView([here.lat, here.lon], 9); // 地図の中心を現在地に設定
         // 必要に応じて、現在地マーカーを追加
-        // L.marker([here.lat, here.lon]).addTo(map).bindPopup("現在地").openPopup();
+        L.marker([here.lat, here.lon])
+          .addTo(map)
+          .bindPopup("現在地")
+          .openPopup();
         // 震源距離の計算が基準点に依存する場合、関連データの再描画が必要かもしれません
         // updateCombinedDisplay(); // 例: 統合表示を更新
         // console.log("地図の中心を現在地に設定しました:", here);
@@ -3554,6 +3605,7 @@ window.addEventListener("load", function () {
       // 現在地取得失敗時の処理
       // 例: ユーザーに通知、デフォルト位置のまま処理を継続
       alert("現在地を取得できませんでした。デフォルトの位置情報で表示します。");
+
       // 必要に応じて、デフォルト位置での初期化処理を再実行
       // initMap(); // 例: 地図を初期化
     }
@@ -4850,18 +4902,19 @@ async function fetchTsunamiData() {
     // === 追加 ここまで ===
 
     // latestTsunamiInfo をグローバル変数に格納 (既存コード)
-   window.latestTsunamiInfo = latestTsunamiInfo; // グローバル変数に保存
+    window.latestTsunamiInfo = latestTsunamiInfo; // グローバル変数に保存
 
-// --- 追加開始 ---
-// 1. GeoJSONデータがまだ読み込まれていない場合の処理
+    // --- 追加開始 ---
+    // 1. GeoJSONデータがまだ読み込まれていない場合の処理
 
-
-// 3. GeoJSONデータが存在する場合のみ、レイヤーを更新
-if (map) {
-    updateTsunamiLayerOnMap();
-    console.log("🔁 fetchTsunamiData: 津波データ取得後、レイヤーを更新しました。");
-}
-// --- 追加終了 ---
+    // 3. GeoJSONデータが存在する場合のみ、レイヤーを更新
+    if (map) {
+      updateTsunamiLayerOnMap();
+      console.log(
+        "🔁 fetchTsunamiData: 津波データ取得後、レイヤーを更新しました。"
+      );
+    }
+    // --- 追加終了 ---
     // === 追加 ここまで ===
     if (latestTsunamiInfo.cancelled) {
       tsunamiDataContainer.innerHTML = `
@@ -4974,9 +5027,12 @@ async function fetchTsunamiAreaGeoJson() {
         "読み込まれたファイルは有効な GeoJSON FeatureCollection ではありません。"
       );
     }
-// === 追加: デバッグ用、最初の1,2件のプロパティをログに出力 ===
-console.log("📡 GeoJSONから読み込んだ最初の2件の区域名:", geojsonData.features.slice(0, 2).map(f => f.properties?.name));
-// === 追加 ここまで ===
+    // === 追加: デバッグ用、最初の1,2件のプロパティをログに出力 ===
+    console.log(
+      "📡 GeoJSONから読み込んだ最初の2件の区域名:",
+      geojsonData.features.slice(0, 2).map((f) => f.properties?.name)
+    );
+    // === 追加 ここまで ===
     // 5. グローバル変数に格納
     tsunamiAreaGeoJsonData = geojsonData; // <-- この変数名は既存のコードと一致
 
@@ -5006,235 +5062,302 @@ console.log("📡 GeoJSONから読み込んだ最初の2件の区域名:", geojs
 // - 新規関数: 地図上に津波レイヤーを追加/更新 -
 function updateTsunamiLayerOnMap() {
   // updateTsunamiLayerOnMap 関数の最初付近に追加
-console.log("🔍 updateTsunamiLayerOnMap が呼び出されました。");
-console.log(" - window.tsunamiAreaGeoJsonData の状態:", !!window.tsunamiAreaGeoJsonData, `(Feature数: ${window.tsunamiAreaGeoJsonData?.features?.length || 'N/A'})`);
-console.log(" - window.latestTsunamiInfo の状態:", !!window.latestTsunamiInfo);
-if (window.latestTsunamiInfo) {
-    console.log(" - latestTsunamiInfo.cancelled:", window.latestTsunamiInfo.cancelled);
+  console.log("🔍 updateTsunamiLayerOnMap が呼び出されました。");
+  console.log(
+    " - window.tsunamiAreaGeoJsonData の状態:",
+    !!window.tsunamiAreaGeoJsonData,
+    `(Feature数: ${window.tsunamiAreaGeoJsonData?.features?.length || "N/A"})`
+  );
+  console.log(
+    " - window.latestTsunamiInfo の状態:",
+    !!window.latestTsunamiInfo
+  );
+  if (window.latestTsunamiInfo) {
+    console.log(
+      " - latestTsunamiInfo.cancelled:",
+      window.latestTsunamiInfo.cancelled
+    );
     console.log(" - latestTsunamiInfo.areas:", window.latestTsunamiInfo.areas);
     if (Array.isArray(window.latestTsunamiInfo.areas)) {
-        console.log(" - latestTsunamiInfo.areas の名前リスト:", window.latestTsunamiInfo.areas.map(a => `'${a.name}'`));
+      console.log(
+        " - latestTsunamiInfo.areas の名前リスト:",
+        window.latestTsunamiInfo.areas.map((a) => `'${a.name}'`)
+      );
     }
-}
-    try {
-      
-        // 1. 既存の津波レイヤーがあれば削除
-        if (tsunamiLayer && map.hasLayer(tsunamiLayer)) {
-            map.removeLayer(tsunamiLayer);
-            tsunamiLayer = null;
-            console.log("🗑️ 既存の津波レイヤーを削除しました。");
-        }
+  }
+  try {
+    // 1. 既存の津波レイヤーがあれば削除
+    if (tsunamiLayer && map.hasLayer(tsunamiLayer)) {
+      map.removeLayer(tsunamiLayer);
+      tsunamiLayer = null;
+      console.log("🗑️ 既存の津波レイヤーを削除しました。");
+    }
 
-        // 2. データが揃っているかチェック
-        const latestTsunamiInfo = window.latestTsunamiInfo; // 明示的にグローバル変数から取得
-        if (!latestTsunamiInfo || latestTsunamiInfo.cancelled === true || !Array.isArray(latestTsunamiInfo.areas) || latestTsunamiInfo.areas.length === 0) {
-            console.log("ℹ️ 現在発表中の津波警報情報がありません。区域の境界線のみ表示します。");
-             // 警報がない場合でも、区域の境界線を表示するように変更
-            // スタイルはデフォルトまたは淡色で
-            tsunamiLayer = L.geoJSON(tsunamiAreaGeoJsonData, {
-                style: function (feature) {
-                    return {
-                        color: "#888888", // グレー
-                        weight: 1,
-                        opacity: 0.5,
-                        fillColor: "#cccccc",
-                        fillOpacity: 0.1
-                    };
-                },
-                onEachFeature: function (feature, layer) {
-                    if (feature.properties && feature.properties.name) {
-                        layer.bindPopup(`<b>${feature.properties.name}</b>`);
-                    }
-                }
-            });
-            tsunamiLayer.addTo(map);
-            console.log("🗺️ 津波予報区域の境界線を表示しました (警報なし)。");
-            return;
-        }
+    // 2. データが揃っているかチェック
+    const latestTsunamiInfo = window.latestTsunamiInfo; // 明示的にグローバル変数から取得
+    if (
+      !latestTsunamiInfo ||
+      latestTsunamiInfo.cancelled === true ||
+      !Array.isArray(latestTsunamiInfo.areas) ||
+      latestTsunamiInfo.areas.length === 0
+    ) {
+      console.log(
+        "ℹ️ 現在発表中の津波警報情報がありません。区域の境界線のみ表示します。"
+      );
+      // 警報がない場合でも、区域の境界線を表示するように変更
+      // スタイルはデフォルトまたは淡色で
+      tsunamiLayer = L.geoJSON(tsunamiAreaGeoJsonData, {
+        style: function (feature) {
+          return {
+            color: "#888888", // グレー
+            weight: 1,
+            opacity: 0.5,
+            fillColor: "#cccccc",
+            fillOpacity: 0.1,
+          };
+        },
+        onEachFeature: function (feature, layer) {
+          if (feature.properties && feature.properties.name) {
+            layer.bindPopup(`<b>${feature.properties.name}</b>`);
+          }
+        },
+      });
+      tsunamiLayer.addTo(map);
+      console.log("🗺️ 津波予報区域の境界線を表示しました (警報なし)。");
+      return;
+    }
 
-        // 3. === デバッグ: APIデータとGeoJSONデータの中身を詳細ログに出力 ===
-        console.log("🔍 updateTsunamiLayerOnMap が呼び出されました。");
-        console.log(" - latestTsunamiInfo.areas の内容 (名前のみ):", latestTsunamiInfo.areas.map(a => a.name));
-        console.log(" - GeoJSON features の最初の5件の name:", tsunamiAreaGeoJsonData.features.slice(0, 5).map(f => f.properties?.name));
+    // 3. === デバッグ: APIデータとGeoJSONデータの中身を詳細ログに出力 ===
+    console.log("🔍 updateTsunamiLayerOnMap が呼び出されました。");
+    console.log(
+      " - latestTsunamiInfo.areas の内容 (名前のみ):",
+      latestTsunamiInfo.areas.map((a) => a.name)
+    );
+    console.log(
+      " - GeoJSON features の最初の5件の name:",
+      tsunamiAreaGeoJsonData.features.slice(0, 5).map((f) => f.properties?.name)
+    );
 
-        // === 改良版: API区域名リスト作成 (文字列を正規化・トリム) ===
-        const apiRegionNames = new Set();
-        console.log("📡 APIから区域名を抽出中...");
-        latestTsunamiInfo.areas.forEach((area, index) => {
-            if (area.name) {
-                // === 改良: 文字列を正規化・トリム ===
-                const rawName = area.name;
-                const trimmedName = rawName.trim();
-                const normalizedName = trimmedName.normalize('NFC'); // Unicode正規化
-                apiRegionNames.add(normalizedName);
-                console.log(`  - API[${index}]: '${rawName}' -> trimmed: '${trimmedName}' -> normalized: '${normalizedName}'`);
-            } else {
-                console.warn(`  - API[${index}]: name プロパティがありません。`, area);
-            }
-        });
-        console.log("📡 抽出・正規化されたAPI区域名リスト:", Array.from(apiRegionNames));
+    // === 改良版: API区域名リスト作成 (文字列を正規化・トリム) ===
+    const apiRegionNames = new Set();
+    console.log("📡 APIから区域名を抽出中...");
+    latestTsunamiInfo.areas.forEach((area, index) => {
+      if (area.name) {
+        // === 改良: 文字列を正規化・トリム ===
+        const rawName = area.name;
+        const trimmedName = rawName.trim();
+        const normalizedName = trimmedName.normalize("NFC"); // Unicode正規化
+        apiRegionNames.add(normalizedName);
+        console.log(
+          `  - API[${index}]: '${rawName}' -> trimmed: '${trimmedName}' -> normalized: '${normalizedName}'`
+        );
+      } else {
+        console.warn(`  - API[${index}]: name プロパティがありません。`, area);
+      }
+    });
+    console.log(
+      "📡 抽出・正規化されたAPI区域名リスト:",
+      Array.from(apiRegionNames)
+    );
+    // === 改良 ここまで ===
+
+    // === 改良版: GeoJSONデータをフィルタリング (文字列を正規化・トリムして比較) ===
+    console.log("🔍 GeoJSONデータをフィルタリング中...");
+    const filteredFeatures = tsunamiAreaGeoJsonData.features.filter(
+      (feature, index) => {
+        const rawGeoName = feature.properties?.name;
+        // === 改良: GeoJSON名も同様に処理 ===
+        const trimmedGeoName = rawGeoName ? rawGeoName.trim() : null;
+        const normalizedGeoName = trimmedGeoName
+          ? trimmedGeoName.normalize("NFC")
+          : null;
         // === 改良 ここまで ===
 
-        // === 改良版: GeoJSONデータをフィルタリング (文字列を正規化・トリムして比較) ===
-        console.log("🔍 GeoJSONデータをフィルタリング中...");
-        const filteredFeatures = tsunamiAreaGeoJsonData.features.filter((feature, index) => {
-            const rawGeoName = feature.properties?.name;
-            // === 改良: GeoJSON名も同様に処理 ===
-            const trimmedGeoName = rawGeoName ? rawGeoName.trim() : null;
-            const normalizedGeoName = trimmedGeoName ? trimmedGeoName.normalize('NFC') : null;
-            // === 改良 ここまで ===
-
-            // 最初の数件だけ詳細ログ (特殊文字を可視化)
-            if (index < 50) {
-                console.log(`  - GeoJSON[${index}]: '${rawGeoName}' -> trimmed: '${trimmedGeoName}' -> normalized: '${normalizedGeoName}'`);
-                if (rawGeoName !== trimmedGeoName) {
-                    console.log(`    -> 元の名前に空白がありました。`);
-                }
-            }
-
-            if (!normalizedGeoName) {
-                if (index < 5) console.log(`  - GeoJSON[${index}]: name プロパティがありません。スキップします。`);
-                return false;
-            }
-
-            // === 改良: 正規化された名前で比較 ===
-            const isMatch = apiRegionNames.has(normalizedGeoName);
-            // === 改良 ここまで ===
-
-            if (isMatch) {
-                console.log(`  ✅ マッチ成功: GeoJSON[${index}] '${normalizedGeoName}' === API区域名`);
-            } else if (index < 5) {
-                // マッチしなかった場合もログに出す (多いと煩雑になるので、最初の数件のみ)
-                console.log(`  - GeoJSON[${index}]: '${normalizedGeoName}' はAPIリストにありません。`);
-            }
-
-            return isMatch;
-        });
-        console.log(`🔍 フィルタリング完了。マッチしたFeature数: ${filteredFeatures.length}`);
-        // === 改良 ここまで ===
-
-        // 4. フィルタリングされたデータがなければ終了
-        if (filteredFeatures.length === 0) {
-            console.log("⚠️ APIの区域名とGeoJSONの区域名が一致するデータがありませんでした。");
-            // 必要に応じて、ここでも境界線を表示するか処理を追加できます
-            return;
+        // 最初の数件だけ詳細ログ (特殊文字を可視化)
+        if (index < 50) {
+          console.log(
+            `  - GeoJSON[${index}]: '${rawGeoName}' -> trimmed: '${trimmedGeoName}' -> normalized: '${normalizedGeoName}'`
+          );
+          if (rawGeoName !== trimmedGeoName) {
+            console.log(`    -> 元の名前に空白がありました。`);
+          }
         }
 
-        // 5. === 以降は変更なし（スタイル設定、レイヤー作成、追加） ===
-        // 警報状況データをマップ化 (区域名 -> {grade, immediate, maxHeight, firstHeight})
-        // === 改良: こちらも正規化された名前でマップを作成 ===
-        const tsunamiStatusMap = new Map();
-        latestTsunamiInfo.areas.forEach((area) => {
-            if (area.name) {
-                const normalizedName = area.name.trim().normalize('NFC');
-                tsunamiStatusMap.set(normalizedName, {
-                    grade: area.grade,
-                    immediate: area.immediate,
-                    maxHeight: area.maxHeight,
-                    firstHeight: area.firstHeight
+        if (!normalizedGeoName) {
+          if (index < 5)
+            console.log(
+              `  - GeoJSON[${index}]: name プロパティがありません。スキップします。`
+            );
+          return false;
+        }
+
+        // === 改良: 正規化された名前で比較 ===
+        const isMatch = apiRegionNames.has(normalizedGeoName);
+        // === 改良 ここまで ===
+
+        if (isMatch) {
+          console.log(
+            `  ✅ マッチ成功: GeoJSON[${index}] '${normalizedGeoName}' === API区域名`
+          );
+        } else if (index < 5) {
+          // マッチしなかった場合もログに出す (多いと煩雑になるので、最初の数件のみ)
+          console.log(
+            `  - GeoJSON[${index}]: '${normalizedGeoName}' はAPIリストにありません。`
+          );
+        }
+
+        return isMatch;
+      }
+    );
+    console.log(
+      `🔍 フィルタリング完了。マッチしたFeature数: ${filteredFeatures.length}`
+    );
+    // === 改良 ここまで ===
+
+    // 4. フィルタリングされたデータがなければ終了
+    if (filteredFeatures.length === 0) {
+      console.log(
+        "⚠️ APIの区域名とGeoJSONの区域名が一致するデータがありませんでした。"
+      );
+      // 必要に応じて、ここでも境界線を表示するか処理を追加できます
+      return;
+    }
+
+    // 5. === 以降は変更なし（スタイル設定、レイヤー作成、追加） ===
+    // 警報状況データをマップ化 (区域名 -> {grade, immediate, maxHeight, firstHeight})
+    // === 改良: こちらも正規化された名前でマップを作成 ===
+    const tsunamiStatusMap = new Map();
+    latestTsunamiInfo.areas.forEach((area) => {
+      if (area.name) {
+        const normalizedName = area.name.trim().normalize("NFC");
+        tsunamiStatusMap.set(normalizedName, {
+          grade: area.grade,
+          immediate: area.immediate,
+          maxHeight: area.maxHeight,
+          firstHeight: area.firstHeight,
+        });
+      }
+    });
+    // === 改良 ここまで ===
+
+    // フィルタリングされたGeoJSONデータを元に、スタイル付きのLeaflet GeoJSONレイヤーを作成
+    tsunamiLayer = L.geoJSON(
+      { type: "FeatureCollection", features: filteredFeatures },
+      {
+        // 新しいFeatureCollectionを作成
+        style: function (feature) {
+          // === 改良: こちらも正規化された名前で取得 ===
+          const regionName = feature.properties.name.trim().normalize("NFC");
+          // === 改良 ここまで ===
+          const status = tsunamiStatusMap.get(regionName);
+
+          // ... (スタイル設定ロジックは変更なし) ...
+          if (status) {
+            let color, weight, opacity, fillColor, fillOpacity;
+            switch (status.grade) {
+              case "MajorWarning": // 大津波警報
+                color = "#800080"; // Purple
+                fillColor = "#800080";
+                weight = 8;
+                opacity = 0.9;
+                fillOpacity = 0.3;
+                break;
+              case "Warning": // 津波警報
+                color = "#FF0000"; // Red
+                fillColor = "#FF0000";
+                weight = 6;
+                opacity = 0.85;
+                fillOpacity = 0.25;
+                break;
+              case "Watch": // 津波注意報
+                color = "#ffd740"; // Orange
+                fillColor = "#ffd740";
+                weight = 4;
+                opacity = 0.8;
+                fillOpacity = 0.2;
+                break;
+              default:
+                color = "#0000FF"; // Default Blue
+                fillColor = "#0000FF";
+                weight = 2;
+                opacity = 0.7;
+                fillOpacity = 0.1;
+            }
+            return {
+              color: color,
+              weight: weight,
+              opacity: opacity,
+              fillColor: fillColor,
+              fillOpacity: fillOpacity,
+            };
+          } else {
+            // 理論上、フィルタリングされているのでここには来ないはず
+            return {
+              color: "#888888",
+              weight: 1,
+              opacity: 0.4,
+              fillColor: "#cccccc",
+              fillOpacity: 0.05,
+            };
+          }
+        },
+        onEachFeature: function (feature, layer) {
+          // === 改良: こちらも正規化された名前で取得 ===
+          const regionName = feature.properties.name.trim().normalize("NFC");
+          // === 改良 ここまで ===
+          const status = tsunamiStatusMap.get(regionName);
+          if (status) {
+            let popupContent = `<b>${feature.properties.name}</b>`; // 表示は元の名前
+            popupContent += `<br>警報等級: ${status.grade || "不明"}`;
+            if (status.immediate) {
+              popupContent += "<br><b>⚠️ 直ちに来襲</b>";
+            }
+            if (status.firstHeight) {
+              popupContent += `<br>第1波: ${
+                status.firstHeight.condition || "情報なし"
+              }`;
+              if (status.firstHeight.arrivalTime) {
+                const timeStr = new Date(
+                  status.firstHeight.arrivalTime
+                ).toLocaleTimeString("ja-JP", {
+                  hour: "2-digit",
+                  minute: "2-digit",
                 });
+                popupContent += ` (${timeStr})`;
+              }
             }
-        });
-        // === 改良 ここまで ===
+            if (status.maxHeight) {
+              popupContent += `<br>予想最大波高: ${
+                status.maxHeight.description ||
+                status.maxHeight.value + "m" ||
+                "情報なし"
+              }`;
+            }
+            layer.bindPopup(popupContent);
+          } else {
+            // 理論上、ここにも来ないはず
+            layer.bindPopup(
+              `<b>${feature.properties.name}</b><br>警報情報なし`
+            );
+          }
+        },
+      }
+    );
 
-        // フィルタリングされたGeoJSONデータを元に、スタイル付きのLeaflet GeoJSONレイヤーを作成
-        tsunamiLayer = L.geoJSON({ type: "FeatureCollection", features: filteredFeatures }, { // 新しいFeatureCollectionを作成
-            style: function (feature) {
-                // === 改良: こちらも正規化された名前で取得 ===
-                const regionName = feature.properties.name.trim().normalize('NFC');
-                // === 改良 ここまで ===
-                const status = tsunamiStatusMap.get(regionName);
-
-                // ... (スタイル設定ロジックは変更なし) ...
-                if (status) {
-                    let color, weight, opacity, fillColor, fillOpacity;
-                    switch (status.grade) {
-                        case "MajorWarning": // 大津波警報
-                            color = "#800080"; // Purple
-                            fillColor = "#800080";
-                            weight = 8;
-                            opacity = 0.9;
-                            fillOpacity = 0.3;
-                            break;
-                        case "Warning": // 津波警報
-                            color = "#FF0000"; // Red
-                            fillColor = "#FF0000";
-                            weight = 6;
-                            opacity = 0.85;
-                            fillOpacity = 0.25;
-                            break;
-                        case "Watch": // 津波注意報
-                            color = "#ffd740"; // Orange
-                            fillColor = "#ffd740";
-                            weight = 4;
-                            opacity = 0.8;
-                            fillOpacity = 0.2;
-                            break;
-                        default:
-                            color = "#0000FF"; // Default Blue
-                            fillColor = "#0000FF";
-                            weight = 2;
-                            opacity = 0.7;
-                            fillOpacity = 0.1;
-                    }
-                    return {
-                        color: color,
-                        weight: weight,
-                        opacity: opacity,
-                        fillColor: fillColor,
-                        fillOpacity: fillOpacity
-                    };
-                } else {
-                    // 理論上、フィルタリングされているのでここには来ないはず
-                    return {
-                        color: "#888888",
-                        weight: 1,
-                        opacity: 0.4,
-                        fillColor: "#cccccc",
-                        fillOpacity: 0.05
-                    };
-                }
-            },
-            onEachFeature: function (feature, layer) {
-                // === 改良: こちらも正規化された名前で取得 ===
-                const regionName = feature.properties.name.trim().normalize('NFC');
-                // === 改良 ここまで ===
-                const status = tsunamiStatusMap.get(regionName);
-                if (status) {
-                    let popupContent = `<b>${feature.properties.name}</b>`; // 表示は元の名前
-                    popupContent += `<br>警報等級: ${status.grade || '不明'}`;
-                    if (status.immediate) {
-                        popupContent += "<br><b>⚠️ 直ちに来襲</b>";
-                    }
-                    if (status.firstHeight) {
-                        popupContent += `<br>第1波: ${status.firstHeight.condition || '情報なし'}`;
-                        if (status.firstHeight.arrivalTime) {
-                             const timeStr = new Date(status.firstHeight.arrivalTime).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-                             popupContent += ` (${timeStr})`;
-                        }
-                    }
-                    if (status.maxHeight) {
-                        popupContent += `<br>予想最大波高: ${status.maxHeight.description || status.maxHeight.value + 'm' || '情報なし'}`;
-                    }
-                    layer.bindPopup(popupContent);
-                } else {
-                    // 理論上、ここにも来ないはず
-                    layer.bindPopup(`<b>${feature.properties.name}</b><br>警報情報なし`);
-                }
-            },
-        });
-
-        // 地図にレイヤーを追加
-        if (tsunamiLayer) {
-            tsunamiLayer.addTo(map);
-            console.log("✅ フィルタリングされた津波レイヤーを地図に追加しました。");
-
-            
-        }
-    } catch (error) {
-        console.error("❌ 津波GeoJSONレイヤーの作成または追加中にエラーが発生しました:", error);
-        alert(`津波レイヤーの作成中にエラーが発生しました。\nエラー: ${error.message}`);
+    // 地図にレイヤーを追加
+    if (tsunamiLayer) {
+      tsunamiLayer.addTo(map);
+      console.log("✅ フィルタリングされた津波レイヤーを地図に追加しました。");
     }
+  } catch (error) {
+    console.error(
+      "❌ 津波GeoJSONレイヤーの作成または追加中にエラーが発生しました:",
+      error
+    );
+    alert(
+      `津波レイヤーの作成中にエラーが発生しました。\nエラー: ${error.message}`
+    );
+  }
 }
 // 自動更新機能
 function startAutoRefresh() {
@@ -5638,7 +5761,7 @@ const clearDateRangeButton = document.getElementById("clearDateRangeButton"); //
 function applyDateRange() {
   // 入力値を取得し、Date オブジェクトに変換
   let newMin = null;
-  let newMax = null;
+  let newMax = new Date();
 
   if (dateMinInput && dateMinInput.value) {
     // datetime-local は通常 'YYYY-MM-DDTHH:MM' 形式で値を返す
@@ -5706,10 +5829,12 @@ function applyDateRange() {
 // 日時範囲をクリアする関数
 function clearDateRange() {
   datemin = null;
-  datemax = null;
+  datemax = new Date();
   if (dateMinInput) dateMinInput.value = "";
   if (dateMaxInput) dateMaxInput.value = "";
-  console.log(`日時範囲がクリアされました: datemin=null, datemax=null`);
+  console.log(
+    `日時範囲がクリアされました: datemin=null, datemax=${datemax.toISOString()}`
+  );
   updateCombinedDisplay(); // 表示を更新
 }
 
@@ -5722,93 +5847,100 @@ if (clearDateRangeButton) {
   clearDateRangeButton.addEventListener("click", clearDateRange);
 }
 
-
 // 新しい関数: renamed_h*.json データを取得し、combinedData に格納
 async function fetchRenamedHypoData(/* 必要に応じて引数、例: filenamePattern */) {
-    // 1. combinedData の対応するプロパティを初期化
-    //    (既存の fetchJmaHypoData のように、配列で初期化するのが一般的)
-    combinedData.renamedHypoData = []; // または jmaHypoData など、適切な名前
+  // 1. combinedData の対応するプロパティを初期化
+  //    (既存の fetchJmaHypoData のように、配列で初期化するのが一般的)
+  combinedData.renamedHypoData = []; // または jmaHypoData など、適切な名前
 
-    try {
-        // 2. JSON ファイルの URL を構築
-        //    例: const url = `path/to/your/data/renamed_h1919.json`;
-        //    複数ファイルを処理する場合はループや動的なURL生成が必要
-        // *** パスが正しいか確認してください ***
-        const url = 'renamed_h202303.json'; // <- 実際のパスに置き換え
+  try {
+    // 2. JSON ファイルの URL を構築
+    //    例: const url = `path/to/your/data/renamed_h1919.json`;
+    //    複数ファイルを処理する場合はループや動的なURL生成が必要
+    // *** パスが正しいか確認してください ***
+    const url = "renamed_h202303.json"; // <- 実際のパスに置き換え
 
-        // 3. fetch API を使用してデータを取得
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTPエラー: ${response.status} (${response.statusText})`);
-        }
-
-        // 4. レスポンスを JSON としてパース
-        const data = await response.json();
-
-        // 5. *** 修正: data.features が存在し、配列であることを確認 ***
-        let processedData = [];
-        if (data && Array.isArray(data)) { // *** 重要: data自体が配列の場合 ***
-            processedData = data.map((feature) => {
-                // *** 修正: ブラケット記法でプロパティにアクセス ***
-                // *** プロパティ名が正しいか確認してください ***
-                const lat = parseFloat(feature["9-10"]); // 数値に変換
-                const lon = parseFloat(feature["12-13"]); // 数値に変換
-                // 深さ、マグニチュードなども必要に応じて変換
-                const depthValue = feature["15"];
-                const depth = (depthValue !== null && depthValue !== undefined) ? parseFloat(depthValue) : null;
-                const magValue = feature["17"];
-                const magnitude = (magValue !== null && magValue !== undefined) ? parseFloat(magValue) : null;
-
-                let distance = Infinity; // デフォルト値
-                if (!isNaN(lat) && !isNaN(lon)) {
-                   distance = epicentralDistance(
-                      lat,
-                      lon,
-                      here.lat,
-                      here.lon
-                   );
-                }
-
-
-                return {
-                    // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
-                    source: "jma_geojson_old", // ✅ ソースを明示
-                    displayType: "eq", // ✅ 表示タイプを明示
-                    // *** 修正: ブラケット記法でプロパティ値を取得 ***
-                    time: feature["2-7"], // 発生時刻 (文字列のままか、Dateオブジェクトに変換)
-                    location: feature["29"] || "不明", // 震源地
-                    magnitude: magnitude, // 数値
-                    magtype: feature["18"] || "", // マグニチュードの種類
-                    depth: depth, // 数値 (km)
-                    lat: lat, // 数値
-                    lng: lon, // 数値
-                    distance: distance !== Infinity ? distance.toFixed(2) : "情報なし", // 震央距離 (km)
-                    intensity: feature["24"] || "なし", // 最大震度 (あれば)
-                    // 必要に応じて他のプロパティも追加
-                    // title: feature["..."] || `M${magnitude} 地震`,
-                    // json: feature["..."],
-                    // ... 他のプロパティ
-                };
-            });
-        } else {
-             console.warn("取得したデータが期待される配列形式ではありません:", data);
-             // data.features がなかったり配列でない場合の処理
-             // processedData は空のまま []
-        }
-
-        // 6. 取得・変換したデータを combinedData に格納
-        combinedData.renamedHypoData = processedData;
-
-        // 7. 表示を更新
-        updateCombinedDisplay();
-        console.log("🔍 renamed_h*.json データを取得・変換し、combinedData に格納しました:", processedData);
-
-    } catch (error) {
-        console.error("❌ renamed_h*.json データの取得または解析中にエラーが発生しました:", error);
-        // エラー時も combinedData をクリアまたはエラー状態に設定し、表示を更新
-        combinedData.renamedHypoData = [];
-        updateCombinedDisplay();
+    // 3. fetch API を使用してデータを取得
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(
+        `HTTPエラー: ${response.status} (${response.statusText})`
+      );
     }
+
+    // 4. レスポンスを JSON としてパース
+    const data = await response.json();
+
+    // 5. *** 修正: data.features が存在し、配列であることを確認 ***
+    let processedData = [];
+    if (data && Array.isArray(data)) {
+      // *** 重要: data自体が配列の場合 ***
+      processedData = data.map((feature) => {
+        // *** 修正: ブラケット記法でプロパティにアクセス ***
+        // *** プロパティ名が正しいか確認してください ***
+        const lat = parseFloat(feature["9-10"]); // 数値に変換
+        const lon = parseFloat(feature["12-13"]); // 数値に変換
+        // 深さ、マグニチュードなども必要に応じて変換
+        const depthValue = feature["15"];
+        const depth =
+          depthValue !== null && depthValue !== undefined
+            ? parseFloat(depthValue)
+            : null;
+        const magValue = feature["17"];
+        const magnitude =
+          magValue !== null && magValue !== undefined
+            ? parseFloat(magValue)
+            : null;
+
+        let distance = Infinity; // デフォルト値
+        if (!isNaN(lat) && !isNaN(lon)) {
+          distance = epicentralDistance(lat, lon, here.lat, here.lon);
+        }
+
+        return {
+          // 統一されたプロパティ名を使用 (他のデータソースと整合性を持たせる)
+          source: "jma_geojson_old", // ✅ ソースを明示
+          displayType: "eq", // ✅ 表示タイプを明示
+          // *** 修正: ブラケット記法でプロパティ値を取得 ***
+          time: feature["2-7"], // 発生時刻 (文字列のままか、Dateオブジェクトに変換)
+          location: feature["29"] || "不明", // 震源地
+          magnitude: magnitude, // 数値
+          magtype: feature["18"] || "", // マグニチュードの種類
+          depth: depth, // 数値 (km)
+          lat: lat, // 数値
+          lng: lon, // 数値
+          distance: distance !== Infinity ? distance.toFixed(2) : "情報なし", // 震央距離 (km)
+          intensity: feature["24"] || "なし", // 最大震度 (あれば)
+          // 必要に応じて他のプロパティも追加
+          // title: feature["..."] || `M${magnitude} 地震`,
+          // json: feature["..."],
+          // ... 他のプロパティ
+        };
+      });
+    } else {
+      console.warn("取得したデータが期待される配列形式ではありません:", data);
+      // data.features がなかったり配列でない場合の処理
+      // processedData は空のまま []
+    }
+
+    // 6. 取得・変換したデータを combinedData に格納
+    combinedData.renamedHypoData = processedData;
+
+    // 7. 表示を更新
+    updateCombinedDisplay();
+    console.log(
+      "🔍 renamed_h*.json データを取得・変換し、combinedData に格納しました:",
+      processedData
+    );
+  } catch (error) {
+    console.error(
+      "❌ renamed_h*.json データの取得または解析中にエラーが発生しました:",
+      error
+    );
+    // エラー時も combinedData をクリアまたはエラー状態に設定し、表示を更新
+    combinedData.renamedHypoData = [];
+    updateCombinedDisplay();
+  }
 }
 
 // 関数を呼び出して実行

@@ -185,21 +185,24 @@
             </div>
 
             <h4 style="margin-top: 20px">範囲設定</h4>
-            <label for="magMinInput">最小マグニチュード:</label>
-            <input type="number" id="magMinInput" min="0" max="10" step="0.1" value="0">
-            <!-- min, max, step は適宜調整してください -->
+            <div>
+              <label for="magMinInput">マグニチュード</label>
+              <input type="number" id="magMinInput" min="0" max="10" step="0.1" value="0">
+              <!-- min, max, step は適宜調整してください -->
 
-            <label for="magMaxInput">最大マグニチュード:</label>
-            <input type="number" id="magMaxInput" min="0" max="10" step="0.1" value="10">
-            <!-- min, max, step は適宜調整してください -->
-            <label for="dateMinInput">日時範囲 (最小):</label>
-            <input type="datetime-local" id="dateMinInput" title="YYYY-MM-DDTHH:mm 形式">
-            <label for="dateMaxInput">日時範囲 (最大):</label>
-            <input type="datetime-local" id="dateMaxInput" title="YYYY-MM-DDTHH:mm 形式">
-            <button id="applyDateRangeButton">日時範囲適用</button>
-            <!-- クリアボタンも便利 -->
-            <button id="clearDateRangeButton">日時範囲クリア</button>
-            <button id="applyMagRangeButton">適用</button>
+              <label for="magMaxInput">～</label>
+              <input type="number" id="magMaxInput" min="0" max="10" step="0.1" value="10">
+              <button id="applyMagRangeButton">適用</button> <!-- min, max, step は適宜調整してください -->
+            </div>
+            <div>
+              <label for="dateMinInput">日時範囲(USGS CWAのみ)</label>
+              <input type="datetime-local" id="dateMinInput" title="YYYY-MM-DDTHH:mm 形式">
+              <label for="dateMaxInput">～</label>
+              <input type="datetime-local" id="dateMaxInput" title="YYYY-MM-DDTHH:mm 形式">
+              <button id="applyDateRangeButton">日時範囲適用</button>
+              <!-- クリアボタンも便利 -->
+              <button id="clearDateRangeButton">日時範囲クリア</button>
+            </div>
 
             <h4>EEW (緊急地震速報)</h4>
             <div class="toggle-container">
