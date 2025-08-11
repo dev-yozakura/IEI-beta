@@ -29,6 +29,7 @@ let combinedData = {
   ceaEew: null,
   iclEew: null,
   renamedHypoData: [], // JMAの地震情報を統合するための変数
+  SeismicMonitor: [], // Seismic Monitor データ用
 };
 
 let markerGroup = null; // マーカーのグループを保持する変数
@@ -1597,9 +1598,19 @@ function updateCombinedDisplay() {
     });
   }
 
+
+
   // JMA 緊急地震速報
   if (showJMA && combinedData.jmaEew) {
     allData.push(combinedData.jmaEew);
+  }
+
+
+  //seismicmonitor
+  if (combinedData.SeismicMonitor) {
+    // combinedData.SeismicMonitor が存在する場合
+    allData.push(...combinedData.SeismicMonitor);
+    console.log("SeismicMonitor データを統合表示用 allData に追加しました:", combinedData.SeismicMonitor);
   }
 
   if (
@@ -1897,6 +1908,14 @@ function updateCombinedDisplay() {
       //html += `<p class="location">震源地: ${item.location}</p>`;
       //html += `<p>マグニチュード: ${item.magnitude}</p>`;
       html += `<p>深さ: ${item.depth} km 距離: ${item.distance} km</p>`;
+      html += `<p class="source">情報源: ${item.source}</p>`;
+    }
+
+//seismicMonitor 情報
+    if (item.source === "SeismicMonitor") {
+      html += `<h3>M ${item.magnitude} - ${item.location}</h3>`;
+      html += `<p class="time">発生時刻: ${item.time}</p>`;
+      html += `<p>深さ: ${item.depth} km</p>`;
       html += `<p class="source">情報源: ${item.source}</p>`;
     }
 
@@ -5945,3 +5964,118 @@ async function fetchRenamedHypoData(/* 必要に応じて引数、例: filenameP
 
 // 関数を呼び出して実行
 // fetchRenamedHypoData();
+
+async function fetchAndStoreSeismicData(apiUrl, combinedData, limit = 50, startDate = null, endDate = null) {
+    if (!combinedData.SeismicMonitor) {
+        combinedData.SeismicMonitor = [];
+    }
+
+    let url;
+    let params = new URLSearchParams();
+
+    try {
+        if (startDate && endDate) {
+            url = `${apiUrl}/api/v1/earthquakes/range`;
+            params.append('start_date', startDate);
+            params.append('end_date', endDate);
+        } else {
+            url = `${apiUrl}/api/v1/earthquakes/latest`;
+            params.append('limit', limit);
+        }
+
+        const fullUrl = `${url}?${params.toString()}`;
+        console.log(`Seismic API からデータを取得中: ${fullUrl}`);
+
+        const response = await fetch(fullUrl);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTPエラー ${response.status}: ${response.statusText}. メッセージ: ${errorText}`);
+        }
+
+        const rawDataList = await response.json();
+
+        // 必要な情報を抽出し、time を JST に変換
+        const processedDataList = rawDataList.map(rawData => {
+            const utcTimeString = rawData.properties?.time;
+            let jstTimeString = null;
+
+            if (utcTimeString) {
+                try {
+                    // UTCの日時文字列をDateオブジェクトに変換 (Zを付けてUTCとして解釈)
+                    const utcDate = new Date(utcTimeString);
+                    // JSTはUTC+9時間
+                    const jstDate = new Date(utcDate.getTime() + (9 * 60 * 60 * 1000));
+                    // JSTの日時をISO文字列としてフォーマット (YYYY-MM-DDTHH:mm:ss.sssZ形式だが、JSTの時刻を表す)
+                    // 必要に応じて、表示用に 'YYYY-MM-DD HH:mm:ss' 形式などにフォーマットすることも可能
+                    jstTimeString = jstDate.toISOString().replace('Z', '+09:00'); // 明示的に+09:00を付加
+                    // または、toISOString() のままでもJSTの時刻を表している (Zは付かないが、時刻自体がJST)
+                    // jstTimeString = jstDate.toISOString();
+                } catch (e) {
+                    console.error("日時変換エラー (HTTP):", utcTimeString, e);
+                    jstTimeString = utcTimeString; // 変換失敗時は元の文字列を保持
+                }
+            }
+
+            return {
+                time: jstTimeString, // JSTに変換された時間
+                location: rawData.properties?.flynn_region || "不明",
+                magnitude: rawData.properties?.mag !== undefined ? rawData.properties.mag : null,
+                magtype: rawData.properties?.magtype || "不明",
+                depth: rawData.properties?.depth !== undefined ? rawData.properties.depth : null,
+                lat: rawData.geometry?.coordinates[1] || null,
+                lng: rawData.geometry?.coordinates[0] || null,
+                 source: "SeismicMonitor",
+            displayType: "eq",
+            };
+        });
+
+        combinedData.SeismicMonitor = processedDataList;
+
+        console.log(`Seismic API から ${processedDataList.length} 件のデータを取得し、JST変換して格納しました。`, processedDataList);
+        return processedDataList;
+
+    } catch (error) {
+        console.error("Seismic API からのデータ取得または処理中にエラーが発生しました:", error);
+        throw error;
+    }
+}
+
+// --- 使用例 ---
+
+// 1. データを格納するオブジェクトを定義
+
+// 2. APIサーバーのベースURLを設定 (Azure VMのIPとポート)
+const API_BASE_URL = "http://20.243.200.137:8000"; // あなたのサーバーのIPに置き換えてください
+
+// --- 例1: 最新50件のデータを取得 ---
+fetchAndStoreSeismicData(API_BASE_URL, combinedData, 1000)
+    .then(() => {
+        console.log("最新データ取得完了。combinedData.SeismicMonitor:", combinedData.SeismicMonitor);
+        // ここで取得したデータを使って何かする (例: 地図に表示, リストに表示など)
+    })
+    .catch(error => {
+        console.error("最新データの取得に失敗しました:", error);
+        // エラーハンドリング (例: エラーメッセージ表示)
+    });
+
+// --- 例2: 特定の期間のデータを取得 ---
+// fetchAndStoreSeismicData(API_BASE_URL, combinedData, null, "2025-08-10", "2025-08-11")
+//     .then(() => {
+//         console.log("期間データ取得完了。combinedData.SeismicMonitor:", combinedData.SeismicMonitor);
+//     })
+//     .catch(error => {
+//         console.error("期間データの取得に失敗しました:", error);
+//     });
+
+// --- 例3: 定期的に最新データを取得 (例: 30秒ごと) ---
+// const fetchDataInterval = setInterval(() => {
+//     fetchAndStoreSeismicData(API_BASE_URL, combinedData, 20) // 最新20件
+//         .catch(error => {
+//             console.error("定期取得中にエラー:", error);
+//             // エラーが続くようならインターバルを停止することも検討
+//             // clearInterval(fetchDataInterval);
+//         });
+// }, 30000); // 30000ミリ秒 = 30秒
+
+// // 不要になったら clearInterval(fetchDataInterval); で停止
