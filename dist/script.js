@@ -6049,7 +6049,7 @@ async function fetchAndStoreSeismicData(apiUrl, combinedData, limit = 50, startD
 const API_BASE_URL = "http://20.243.200.137:8000"; // あなたのサーバーのIPに置き換えてください
 
 // --- 例1: 最新50件のデータを取得 ---
-fetchAndStoreSeismicData(API_BASE_URL, combinedData, 1000)
+fetchAndStoreSeismicData(API_BASE_URL, combinedData, 10000)
     .then(() => {
         console.log("最新データ取得完了。combinedData.SeismicMonitor:", combinedData.SeismicMonitor);
         // ここで取得したデータを使って何かする (例: 地図に表示, リストに表示など)
